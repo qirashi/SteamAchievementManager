@@ -137,6 +137,10 @@
         <translation>защищено</translation>
     </message>
     <message>
+        <source>stat can't be raised</source>
+        <translation>показатель не поднять</translation>
+    </message>
+    <message>
         <source>stat stays behind</source>
         <translation>показатель отстанет</translation>
     </message>
@@ -158,6 +162,10 @@
     <message>
         <source>Progress: %1 of %2 (stat %3)</source>
         <translation>Прогресс: %1 из %2 (показатель %3)</translation>
+    </message>
+    <message>
+        <source>Unlocking it leaves the stat where it is, and the program can't raise the stat: %1.</source>
+        <translation>Получение достижения не меняет показатель, а поднять его программа не может: %1.</translation>
     </message>
     <message>
         <source>Unlocking it leaves the stat where it is. To raise the stat too, turn on "Raise the linked stat" in the ☰ menu of the game list.</source>
@@ -775,6 +783,14 @@ Running since %1.</source>
         <translation>защищено</translation>
     </message>
     <message>
+        <source>set by the game server</source>
+        <translation>задаёт сервер игры</translation>
+    </message>
+    <message>
+        <source>at most %1 per save</source>
+        <translation>не больше %1 за сохранение</translation>
+    </message>
+    <message>
         <source>unknown permission</source>
         <translation>неизвестные права</translation>
     </message>
@@ -787,8 +803,16 @@ Running since %1.</source>
         <translation>Исходное значение: %1</translation>
     </message>
     <message>
-        <source>Allowed range: %1 … %2</source>
-        <translation>Допустимый диапазон: %1 … %2</translation>
+        <source>Allowed range: %1</source>
+        <translation>Допустимый диапазон: %1</translation>
+    </message>
+    <message>
+        <source>Steam accepts a change of at most %1 per save.</source>
+        <translation>Steam примет изменение не больше чем на %1 за одно сохранение.</translation>
+    </message>
+    <message>
+        <source>Only the game's server is meant to set this stat.</source>
+        <translation>Этот показатель должен задавать только сервер игры.</translation>
     </message>
     <message>
         <source>Name</source>
@@ -797,6 +821,10 @@ Running since %1.</source>
     <message>
         <source>Value</source>
         <translation>Значение</translation>
+    </message>
+    <message>
+        <source>Range</source>
+        <translation>Диапазон</translation>
     </message>
     <message>
         <source>Flags</source>
@@ -821,6 +849,30 @@ Running since %1.</source>
     <message>
         <source>"%1" is not a valid number.</source>
         <translation>«%1» — некорректное число.</translation>
+    </message>
+    <message>
+        <source>it's an average rate</source>
+        <translation>это среднее значение</translation>
+    </message>
+    <message>
+        <source>it's protected</source>
+        <translation>он защищён</translation>
+    </message>
+    <message>
+        <source>only the game's server sets it</source>
+        <translation>его задаёт только сервер игры</translation>
+    </message>
+    <message>
+        <source>it has an unknown permission flag</source>
+        <translation>у него неизвестный флаг доступа</translation>
+    </message>
+    <message>
+        <source>%1 is above its maximum of %2</source>
+        <translation>%1 больше его максимума %2</translation>
+    </message>
+    <message>
+        <source>Steam accepts a change of at most %1 per save</source>
+        <translation>Steam примет изменение не больше чем на %1 за одно сохранение</translation>
     </message>
 </context>
 </TS>

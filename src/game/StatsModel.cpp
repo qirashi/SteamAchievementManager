@@ -27,6 +27,7 @@
 #include <QBrush>
 #include <QFont>
 #include <QLocale>
+#include <QPalette>
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +40,25 @@ namespace
 QString formatFloat(float value)
 {
     return QLocale().toString(static_cast<double>(value), 'g', std::numeric_limits<float>::max_digits10);
+}
+
+// Limits from the schema, which hold int32 or float values.
+QString formatLimit(double value)
+{
+    return QLocale().toString(value, 'g', 10);
+}
+
+// Whether the schema sets a minimum or maximum, rather than leaving the type's.
+bool hasMin(const Stat &stat)
+{
+    return stat.isInteger() ? stat.definition.minValue > std::numeric_limits<int32_t>::min()
+                            : stat.definition.minValue > std::numeric_limits<float>::lowest();
+}
+
+bool hasMax(const Stat &stat)
+{
+    return stat.isInteger() ? stat.definition.maxValue < std::numeric_limits<int32_t>::max()
+                            : stat.definition.maxValue < std::numeric_limits<float>::max();
 }
 
 bool parseFloat(const QString &text, float *value)
@@ -91,6 +111,16 @@ QString StatsModel::valueText(const Stat &stat) const
     return stat.isInteger() ? QLocale().toString(stat.intValue) : formatFloat(stat.floatValue);
 }
 
+QString StatsModel::rangeText(const Stat &stat) const
+{
+    if (!hasMin(stat) && !hasMax(stat))
+    {
+        return {};
+    }
+    return QStringLiteral("%1 … %2").arg(hasMin(stat) ? formatLimit(stat.definition.minValue) : QStringLiteral("−∞"),
+                                         hasMax(stat) ? formatLimit(stat.definition.maxValue) : QStringLiteral("∞"));
+}
+
 QString StatsModel::flagsText(const Stat &stat) const
 {
     QStringList flags;
@@ -101,6 +131,14 @@ QString StatsModel::flagsText(const Stat &stat) const
     if (stat.isProtected())
     {
         flags << tr("protected");
+    }
+    if (stat.definition.setByTrustedGameServer)
+    {
+        flags << tr("set by the game server");
+    }
+    if (stat.definition.maxChange > 0)
+    {
+        flags << tr("at most %1 per save").arg(formatLimit(stat.definition.maxChange));
     }
     if ((stat.definition.permission & ~2) != 0)
     {
@@ -128,6 +166,7 @@ QVariant StatsModel::data(const QModelIndex &index, int role) const
             {
                 case NameColumn: return stat.definition.displayName.get(m_language, stat.definition.id);
                 case ValueColumn: return valueText(stat);
+                case RangeColumn: return rangeText(stat);
                 case FlagsColumn: return flagsText(stat);
                 case IdColumn: return stat.definition.id;
                 default: return {};
@@ -148,19 +187,27 @@ QVariant StatsModel::data(const QModelIndex &index, int role) const
                     stat.isInteger() ? QLocale().toString(stat.intOriginal) : formatFloat(stat.floatOriginal);
                 tip += QStringLiteral("<br>") + tr("Original value: %1").arg(original);
             }
-            const bool hasMin = stat.isInteger() ? stat.definition.minValue > std::numeric_limits<int>::min()
-                                                 : stat.definition.minValue > std::numeric_limits<float>::lowest();
-            const bool hasMax = stat.isInteger() ? stat.definition.maxValue < std::numeric_limits<int>::max()
-                                                 : stat.definition.maxValue < std::numeric_limits<float>::max();
-            if (hasMin || hasMax)
+            if (const QString range = rangeText(stat); !range.isEmpty())
+            {
+                tip += QStringLiteral("<br>") + tr("Allowed range: %1").arg(range);
+            }
+            if (stat.definition.maxChange > 0)
             {
                 tip += QStringLiteral("<br>") +
-                       tr("Allowed range: %1 … %2")
-                           .arg(hasMin ? QLocale().toString(stat.definition.minValue) : QStringLiteral("−∞"),
-                                hasMax ? QLocale().toString(stat.definition.maxValue) : QStringLiteral("∞"));
+                       tr("Steam accepts a change of at most %1 per save.").arg(formatLimit(stat.definition.maxChange));
+            }
+            if (stat.definition.setByTrustedGameServer)
+            {
+                tip += QStringLiteral("<br>") + tr("Only the game's server is meant to set this stat.");
             }
             return tip;
         }
+        case Qt::ForegroundRole:
+            if (index.column() == RangeColumn || index.column() == FlagsColumn)
+            {
+                return QBrush(QPalette().color(QPalette::PlaceholderText));
+            }
+            return {};
         case Qt::FontRole:
             if (index.column() == ValueColumn && stat.isModified())
             {
@@ -186,6 +233,7 @@ QVariant StatsModel::headerData(int section, Qt::Orientation orientation, int ro
     {
         case NameColumn: return tr("Name");
         case ValueColumn: return tr("Value");
+        case RangeColumn: return tr("Range");
         case FlagsColumn: return tr("Flags");
         case IdColumn: return tr("ID");
         default: return {};
@@ -237,10 +285,9 @@ bool StatsModel::setData(const QModelIndex &index, const QVariant &value, int ro
         newValue = parsed;
         if (newValue < stat.definition.minValue || newValue > stat.definition.maxValue)
         {
-            emit editRejected(tr("Value for \"%1\" must be between %2 and %3.")
-                                  .arg(name,
-                                       QLocale().toString(stat.definition.minValue),
-                                       QLocale().toString(stat.definition.maxValue)));
+            emit editRejected(
+                tr("Value for \"%1\" must be between %2 and %3.")
+                    .arg(name, formatLimit(stat.definition.minValue), formatLimit(stat.definition.maxValue)));
             return false;
         }
         stat.intValue = parsed;
@@ -256,10 +303,9 @@ bool StatsModel::setData(const QModelIndex &index, const QVariant &value, int ro
         newValue = parsed;
         if (newValue < stat.definition.minValue || newValue > stat.definition.maxValue)
         {
-            emit editRejected(tr("Value for \"%1\" must be between %2 and %3.")
-                                  .arg(name,
-                                       QLocale().toString(stat.definition.minValue),
-                                       QLocale().toString(stat.definition.maxValue)));
+            emit editRejected(
+                tr("Value for \"%1\" must be between %2 and %3.")
+                    .arg(name, formatLimit(stat.definition.minValue), formatLimit(stat.definition.maxValue)));
             return false;
         }
         stat.floatValue = parsed;
@@ -311,6 +357,42 @@ int StatsModel::modifiedCount() const
     }));
 }
 
+QString StatsModel::raiseBlocker(int row, double value) const
+{
+    if (row < 0 || row >= m_stats.size())
+    {
+        return {};
+    }
+    const Stat &stat = m_stats.at(row);
+    const StatDefinition &definition = stat.definition;
+    if (definition.kind == StatDefinition::Kind::AverageRate)
+    {
+        return tr("it's an average rate");
+    }
+    if (stat.isProtected())
+    {
+        return tr("it's protected");
+    }
+    if (definition.setByTrustedGameServer)
+    {
+        return tr("only the game's server sets it");
+    }
+    if (definition.permission != 0)
+    {
+        return tr("it has an unknown permission flag");
+    }
+    if (value > definition.maxValue || (stat.isInteger() && value > std::numeric_limits<int32_t>::max()))
+    {
+        return tr("%1 is above its maximum of %2").arg(formatLimit(value), formatLimit(definition.maxValue));
+    }
+    const double original = stat.isInteger() ? stat.intOriginal : stat.floatOriginal;
+    if (definition.maxChange > 0 && value - original > definition.maxChange)
+    {
+        return tr("Steam accepts a change of at most %1 per save").arg(formatLimit(definition.maxChange));
+    }
+    return {};
+}
+
 bool StatsModel::canRaise(int row, double value) const
 {
     if (row < 0 || row >= m_stats.size())
@@ -318,13 +400,8 @@ bool StatsModel::canRaise(int row, double value) const
         return false;
     }
     const Stat &stat = m_stats.at(row);
-    const StatDefinition &definition = stat.definition;
     const double current = stat.isInteger() ? stat.intValue : stat.floatValue;
-    const double original = stat.isInteger() ? stat.intOriginal : stat.floatOriginal;
-    return definition.kind != StatDefinition::Kind::AverageRate && definition.permission == 0 &&
-           !definition.setByTrustedGameServer && value > current && value >= definition.minValue &&
-           value <= definition.maxValue && (definition.maxChange <= 0 || value - original <= definition.maxChange) &&
-           (!stat.isInteger() || value <= std::numeric_limits<int32_t>::max());
+    return raiseBlocker(row, value).isEmpty() && value > current && value >= stat.definition.minValue;
 }
 
 void StatsModel::raise(int row, double value)

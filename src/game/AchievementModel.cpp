@@ -237,7 +237,15 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
                              QLocale().toString(achievement.definition.progressMax, 'g', 10),
                              achievement.definition.progressStat.toHtmlEscaped()));
                 const bool reached = *it >= achievement.definition.progressMax;
-                if (!achievement.achieved && achievement.checked && !reached)
+                const QString blocker = m_raiseBlockers.value(achievement.definition.id);
+                if (!achievement.achieved && achievement.checked && !reached && !blocker.isEmpty())
+                {
+                    tip += QStringLiteral("<br><small>%1</small>")
+                               .arg(tr("Unlocking it leaves the stat where it is, and the program can't raise "
+                                       "the stat: %1.")
+                                        .arg(blocker.toHtmlEscaped()));
+                }
+                else if (!achievement.achieved && achievement.checked && !reached)
                 {
                     tip += QStringLiteral("<br><small>%1</small>")
                                .arg(tr("Unlocking it leaves the stat where it is. To raise the stat too, turn on "
@@ -287,6 +295,7 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
         }
         case ProgressMaxRole: return achievement.definition.progressMax;
         case ProgressStatRole: return achievement.definition.progressStat;
+        case ProgressBlockerRole: return m_raiseBlockers.value(achievement.definition.id);
         case SectionRole: return false;
         default: return {};
     }
@@ -444,9 +453,10 @@ void AchievementModel::setRarity(QHash<QString, double> rarity)
     emitAllChanged();
 }
 
-void AchievementModel::setStatValues(QHash<QString, double> values)
+void AchievementModel::setStatValues(QHash<QString, double> values, QHash<QString, QString> blockers)
 {
     m_statValues = std::move(values);
+    m_raiseBlockers = std::move(blockers);
     emitAllChanged();
 }
 

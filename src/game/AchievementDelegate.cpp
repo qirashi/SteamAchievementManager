@@ -618,7 +618,11 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     if (progressValue.isValid() && !achieved)
     {
         const bool reached = progressValue.toDouble() >= progressMax;
-        if (checked && !reached)
+        if (checked && !reached && !index.data(AchievementModel::ProgressBlockerRole).toString().isEmpty())
+        {
+            badges.append({tr("stat can't be raised"), kOrange, QStringLiteral("lock")});
+        }
+        else if (checked && !reached)
         {
             badges.append({tr("stat stays behind"), kOrange, QStringLiteral("warning")});
         }

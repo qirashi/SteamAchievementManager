@@ -565,6 +565,7 @@ QWidget *ManagerWindow::createStatisticsPage()
     auto *header = m_statsView->horizontalHeader();
     header->setSectionResizeMode(StatsModel::NameColumn, QHeaderView::Stretch);
     header->setSectionResizeMode(StatsModel::ValueColumn, QHeaderView::Interactive);
+    header->setSectionResizeMode(StatsModel::RangeColumn, QHeaderView::ResizeToContents);
     header->setSectionResizeMode(StatsModel::FlagsColumn, QHeaderView::ResizeToContents);
     header->setSectionResizeMode(StatsModel::IdColumn, QHeaderView::ResizeToContents);
     header->resizeSection(StatsModel::ValueColumn, 140);
@@ -825,11 +826,28 @@ void ManagerWindow::loadStatistics()
 void ManagerWindow::updateStatValues()
 {
     QHash<QString, double> values;
-    for (const auto &stat : m_stats->stats())
+    QHash<QString, int> rows;
+    const auto &stats = m_stats->stats();
+    for (int row = 0; row < stats.size(); ++row)
     {
+        const Stat &stat = stats.at(row);
         values.insert(stat.definition.id, stat.isInteger() ? stat.intValue : stat.floatValue);
+        rows.insert(stat.definition.id, row);
     }
-    m_achievements->setStatValues(std::move(values));
+    // Why the program can't raise the stat of an achievement, by achievement.
+    QHash<QString, QString> blockers;
+    for (const auto &achievement : m_achievements->achievements())
+    {
+        const AchievementDefinition &definition = achievement.definition;
+        if (const auto row = rows.constFind(definition.progressStat); row != rows.cend())
+        {
+            if (QString blocker = m_stats->raiseBlocker(*row, definition.progressMax); !blocker.isEmpty())
+            {
+                blockers.insert(definition.id, std::move(blocker));
+            }
+        }
+    }
+    m_achievements->setStatValues(std::move(values), std::move(blockers));
 }
 
 void ManagerWindow::showStat(const QString &id)

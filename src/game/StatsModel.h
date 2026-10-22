@@ -53,6 +53,7 @@ public:
     {
         NameColumn,
         ValueColumn,
+        RangeColumn,
         FlagsColumn,
         IdColumn,
         ColumnCount,
@@ -82,10 +83,12 @@ public:
     int modifiedCount() const;
     void revert(int row);
 
-    // Whether the stat in `row` may be raised to `value` by the program: a
-    // plain integer or float stat with no permission flags (protected, set by a
-    // game server), `value` above the current one, within the stat's range and
-    // its largest change per store.
+    // Why the program can't raise the stat in `row` to `value`: it's an average
+    // rate, has permission flags (protected, set by a game server) or `value`
+    // is past its maximum or its largest change per store. Empty if it can.
+    QString raiseBlocker(int row, double value) const;
+    // Whether the stat in `row` may be raised to `value` by the program: no
+    // raiseBlocker() and `value` above the current one.
     bool canRaise(int row, double value) const;
     // Sets the value without the "I understand" check of the statistics page;
     // only after canRaise().
@@ -97,6 +100,7 @@ signals:
 
 private:
     QString valueText(const Stat &stat) const;
+    QString rangeText(const Stat &stat) const;
     QString flagsText(const Stat &stat) const;
 
     QList<Stat> m_stats;

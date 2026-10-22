@@ -82,11 +82,12 @@ public:
         ProtectedRole,
         HiddenRole,
         ModifiedRole,
-        RarityRole,        // percent of players who have it (double), or invalid
-        UnlockTimeRole,    // QDateTime, invalid when locked
-        ProgressValueRole, // the value of the stat it's unlocked by (double), or invalid
-        ProgressMaxRole,   // the value of that stat that unlocks it
-        ProgressStatRole,  // the ID of that stat
+        RarityRole,          // percent of players who have it (double), or invalid
+        UnlockTimeRole,      // QDateTime, invalid when locked
+        ProgressValueRole,   // the value of the stat it's unlocked by (double), or invalid
+        ProgressMaxRole,     // the value of that stat that unlocks it
+        ProgressStatRole,    // the ID of that stat
+        ProgressBlockerRole, // why the program can't raise that stat, or empty
         // Section rows only.
         SectionRole,
         SectionDlcRole,
@@ -111,8 +112,9 @@ public:
     void setLanguage(const QString &language);
     // Percent of players per achievement ID.
     void setRarity(QHash<QString, double> rarity);
-    // Current values of the stats, by ID: the progress of achievements.
-    void setStatValues(QHash<QString, double> values);
+    // Current values of the stats, by ID: the progress of achievements; and why
+    // the program can't raise the stat of an achievement, by achievement ID.
+    void setStatValues(QHash<QString, double> values, QHash<QString, QString> blockers);
     const QList<Achievement> &achievements() const { return m_achievements; }
 
     bool isGrouped() const { return !m_sections.isEmpty(); }
@@ -168,6 +170,7 @@ private:
     QList<Location> m_locations; // per achievement, when grouped
     QHash<QString, double> m_rarity;
     QHash<QString, double> m_statValues;
+    QHash<QString, QString> m_raiseBlockers;
 };
 
 class AchievementFilterModel : public QSortFilterProxyModel
