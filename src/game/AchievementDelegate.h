@@ -28,8 +28,8 @@
 
 namespace sam
 {
-// Renders an achievement row: check box, icon, name with badges and a
-// two-line description.
+// Renders an achievement row (check box, icon, name with badges and a
+// two-line description) or a section header (name and progress).
 class AchievementDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
@@ -48,6 +48,7 @@ protected:
 
 private:
     QRect checkArea(const QStyleOptionViewItem &option) const;
+    void paintSection(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
 
     bool m_skipNextRelease = false;
 };

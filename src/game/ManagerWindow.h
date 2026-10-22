@@ -24,10 +24,12 @@
 
 #pragma once
 
+#include "AchievementGroups.h"
 #include "Schema.h"
 #include "SteamClient.h"
 
 #include <QMainWindow>
+#include <QSet>
 #include <QTimer>
 
 #include <cstdint>
@@ -78,6 +80,9 @@ private:
     void populateLanguages();
     QString effectiveLanguage() const;
     void applyLanguage();
+    bool isGroupingEnabled() const;
+    void applyGroups();
+    void restoreSectionExpansion();
 
     bool hasChanges() const;
     bool confirmDiscardChanges(const QString &question);
@@ -88,8 +93,10 @@ private:
 
     QList<int> visibleAchievementRows() const;
     QList<int> selectedAchievementRows() const;
+    QList<int> visibleSectionRows(const QModelIndex &section) const;
     void applyToAchievements(const QList<int> &rows, int mode);
     void showAchievementContextMenu(const QPoint &position);
+    void showSectionContextMenu(const QModelIndex &section, const QPoint &position);
     void showStatContextMenu(const QPoint &position);
 
     void setBusy(bool busy, const QString &message = {});
@@ -104,6 +111,9 @@ private:
     QString m_steamLanguage;
     QString m_headerUrl;
     std::optional<Schema> m_schema;
+    std::optional<QList<AchievementGroup>> m_groups; // set once downloaded
+    bool m_groupsRequested = false;
+    QSet<QString> m_collapsedSections;
     bool m_busy = false;
 
     ImageCache *m_images;
@@ -122,6 +132,7 @@ private:
     QAction *m_refreshAction = nullptr;
     QAction *m_resetAction = nullptr;
     QMenu *m_languageMenu = nullptr;
+    QAction *m_groupAction = nullptr;
 
     // Pages
     QTabWidget *m_tabs = nullptr;

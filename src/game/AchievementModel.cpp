@@ -32,22 +32,93 @@
 
 namespace sam
 {
+// Model index layout: top-level items have internal id 0; children of
+// section N have internal id N + 1.
+
 AchievementModel::AchievementModel(uint32_t appId, ImageCache *images, QObject *parent)
-    : QAbstractTableModel(parent)
+    : QAbstractItemModel(parent)
     , m_appId(appId)
     , m_images(images)
 {
     connect(m_images, &ImageCache::imageReady, this, &AchievementModel::onImageReady);
 }
 
-int AchievementModel::rowCount(const QModelIndex &parent) const
+QModelIndex AchievementModel::index(int row, int column, const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : static_cast<int>(m_achievements.size());
+    if (!hasIndex(row, column, parent))
+    {
+        return {};
+    }
+    return createIndex(row, column, parent.isValid() ? static_cast<quintptr>(parent.row()) + 1 : 0);
 }
 
-int AchievementModel::columnCount(const QModelIndex &parent) const
+QModelIndex AchievementModel::parent(const QModelIndex &child) const
 {
-    return parent.isValid() ? 0 : ColumnCount;
+    if (!child.isValid() || child.internalId() == 0)
+    {
+        return {};
+    }
+    return createIndex(static_cast<int>(child.internalId() - 1), 0, quintptr(0));
+}
+
+int AchievementModel::rowCount(const QModelIndex &parent) const
+{
+    if (!parent.isValid())
+    {
+        return static_cast<int>(isGrouped() ? m_sections.size() : m_achievements.size());
+    }
+    if (isSection(parent) && parent.column() == 0)
+    {
+        return static_cast<int>(m_sections.at(parent.row()).members.size());
+    }
+    return 0;
+}
+
+int AchievementModel::columnCount(const QModelIndex &) const
+{
+    return ColumnCount;
+}
+
+bool AchievementModel::isSection(const QModelIndex &index) const
+{
+    return index.isValid() && isGrouped() && index.internalId() == 0;
+}
+
+int AchievementModel::achievementIndex(const QModelIndex &index) const
+{
+    if (!index.isValid() || index.model() != this)
+    {
+        return -1;
+    }
+    if (!isGrouped())
+    {
+        return index.row() < m_achievements.size() ? index.row() : -1;
+    }
+    if (index.internalId() == 0)
+    {
+        return -1;
+    }
+    const int section = static_cast<int>(index.internalId() - 1);
+    if (section >= m_sections.size())
+    {
+        return -1;
+    }
+    return m_sections.at(section).members.value(index.row(), -1);
+}
+
+QModelIndex AchievementModel::indexOf(int achievement, int column) const
+{
+    if (!isGrouped())
+    {
+        return createIndex(achievement, column, quintptr(0));
+    }
+    const Location &location = m_locations.at(achievement);
+    return createIndex(location.row, column, static_cast<quintptr>(location.section) + 1);
+}
+
+QList<int> AchievementModel::sectionMembers(int section) const
+{
+    return m_sections.value(section).members;
 }
 
 QString AchievementModel::displayName(const Achievement &achievement) const
@@ -79,14 +150,48 @@ QString AchievementModel::iconUrl(const Achievement &achievement) const
     return QStringLiteral("https://cdn.steamstatic.com/steamcommunity/public/images/apps/%1/%2").arg(m_appId).arg(icon);
 }
 
+QVariant AchievementModel::sectionData(const Section &section, int column, int role) const
+{
+    switch (role)
+    {
+        case Qt::DisplayRole: return column == NameColumn ? section.name : QVariant();
+        case Qt::ToolTipRole: {
+            QString tip = QStringLiteral("<b>%1</b>").arg(section.name.toHtmlEscaped());
+            if (section.dlcAppId != 0)
+            {
+                tip += QStringLiteral("<br><small>DLC, App ID %1</small>").arg(section.dlcAppId);
+            }
+            return tip;
+        }
+        case SectionRole: return true;
+        case SectionDlcRole: return section.dlcAppId;
+        case SectionCheckedRole:
+            return static_cast<int>(std::count_if(section.members.cbegin(), section.members.cend(), [this](int i) {
+                return m_achievements.at(i).checked;
+            }));
+        case SectionTotalRole: return static_cast<int>(section.members.size());
+        case ModifiedRole:
+            return std::any_of(section.members.cbegin(), section.members.cend(), [this](int i) {
+                return m_achievements.at(i).isModified();
+            });
+        default: return {};
+    }
+}
+
 QVariant AchievementModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() >= m_achievements.size())
+    if (isSection(index))
+    {
+        return index.row() < m_sections.size() ? sectionData(m_sections.at(index.row()), index.column(), role)
+                                               : QVariant();
+    }
+    const int position = achievementIndex(index);
+    if (position < 0)
     {
         return {};
     }
 
-    const Achievement &achievement = m_achievements.at(index.row());
+    const Achievement &achievement = m_achievements.at(position);
     switch (role)
     {
         case Qt::DisplayRole:
@@ -133,6 +238,7 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
         case ProtectedRole: return achievement.isProtected();
         case HiddenRole: return achievement.definition.isHidden;
         case ModifiedRole: return achievement.isModified();
+        case SectionRole: return false;
         default: return {};
     }
 }
@@ -157,7 +263,11 @@ Qt::ItemFlags AchievementModel::flags(const QModelIndex &index) const
     {
         return Qt::NoItemFlags;
     }
-    Qt::ItemFlags result = Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+    if (isSection(index))
+    {
+        return Qt::ItemIsEnabled;
+    }
+    Qt::ItemFlags result = Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemNeverHasChildren;
     if (index.column() == NameColumn)
     {
         result |= Qt::ItemIsUserCheckable;
@@ -167,11 +277,12 @@ Qt::ItemFlags AchievementModel::flags(const QModelIndex &index) const
 
 bool AchievementModel::setData(const QModelIndex &index, const QVariant &value, int role)
 {
-    if (!index.isValid() || role != Qt::CheckStateRole || index.column() != NameColumn)
+    const int position = achievementIndex(index);
+    if (position < 0 || role != Qt::CheckStateRole || index.column() != NameColumn)
     {
         return false;
     }
-    Achievement &achievement = m_achievements[index.row()];
+    Achievement &achievement = m_achievements[position];
     const bool checked = value.value<Qt::CheckState>() == Qt::Checked;
     if (checked == achievement.checked)
     {
@@ -183,7 +294,7 @@ bool AchievementModel::setData(const QModelIndex &index, const QVariant &value, 
         return false;
     }
     achievement.checked = checked;
-    emitRowChanged(index.row());
+    emitRowChanged(position);
     emit changesUpdated();
     return true;
 }
@@ -192,8 +303,74 @@ void AchievementModel::setAchievements(QList<Achievement> achievements)
 {
     beginResetModel();
     m_achievements = std::move(achievements);
+    rebuildSections();
     endResetModel();
     emit changesUpdated();
+}
+
+void AchievementModel::setGroups(QList<AchievementGroup> groups)
+{
+    beginResetModel();
+    m_groups = std::move(groups);
+    rebuildSections();
+    endResetModel();
+}
+
+void AchievementModel::rebuildSections()
+{
+    m_sections.clear();
+    m_locations.clear();
+    if (m_groups.isEmpty() || m_achievements.isEmpty())
+    {
+        return;
+    }
+
+    QHash<QString, int> byId;
+    for (int i = 0; i < m_achievements.size(); ++i)
+    {
+        byId.insert(m_achievements.at(i).definition.id, i);
+    }
+
+    // Section 0 is the base game: everything no group claims.
+    QList<Section> sections;
+    sections.append({tr("Base game"), 0, {}});
+    QList<int> sectionOf(m_achievements.size(), 0);
+    for (const auto &group : std::as_const(m_groups))
+    {
+        const int section = static_cast<int>(sections.size());
+        sections.append({group.name, group.dlcAppId, {}});
+        for (const auto &id : group.achievementIds)
+        {
+            const auto it = byId.constFind(id);
+            if (it != byId.cend() && sectionOf[*it] == 0)
+            {
+                sectionOf[*it] = section;
+            }
+        }
+    }
+    for (int i = 0; i < m_achievements.size(); ++i)
+    {
+        sections[sectionOf[i]].members.append(i);
+    }
+    sections.removeIf([](const Section &section) {
+        return section.members.isEmpty();
+    });
+    // A single section adds nothing over the flat list.
+    if (sections.size() < 2)
+    {
+        return;
+    }
+
+    m_sections = std::move(sections);
+    m_locations.resize(m_achievements.size());
+    for (int s = 0; s < m_sections.size(); ++s)
+    {
+        const auto &members = m_sections.at(s).members;
+        for (int row = 0; row < members.size(); ++row)
+        {
+            m_locations[members.at(row)] = {s, row};
+        }
+    }
 }
 
 void AchievementModel::setLanguage(const QString &language)
@@ -203,10 +380,8 @@ void AchievementModel::setLanguage(const QString &language)
         return;
     }
     m_language = language;
-    if (!m_achievements.isEmpty())
-    {
-        emit dataChanged(index(0, 0), index(rowCount() - 1, ColumnCount - 1));
-    }
+    // Section names don't depend on the achievement language.
+    emitAllChanged();
 }
 
 int AchievementModel::setChecked(const QList<int> &rows, bool checked)
@@ -275,23 +450,47 @@ int AchievementModel::checkedCount() const
 
 void AchievementModel::onImageReady(const QString &url)
 {
-    for (int row = 0; row < m_achievements.size(); ++row)
+    for (int i = 0; i < m_achievements.size(); ++i)
     {
-        if (iconUrl(m_achievements.at(row)) == url)
+        if (iconUrl(m_achievements.at(i)) == url)
         {
-            const QModelIndex changed = index(row, NameColumn);
+            const QModelIndex changed = indexOf(i, NameColumn);
             emit dataChanged(changed, changed, {IconRole});
         }
     }
 }
 
-void AchievementModel::emitRowChanged(int row)
+void AchievementModel::emitRowChanged(int achievement)
 {
-    emit dataChanged(index(row, 0), index(row, ColumnCount - 1));
+    emit dataChanged(indexOf(achievement, 0), indexOf(achievement, ColumnCount - 1));
+    if (isGrouped())
+    {
+        const int section = m_locations.at(achievement).section;
+        emit dataChanged(index(section, 0), index(section, ColumnCount - 1));
+    }
+}
+
+void AchievementModel::emitAllChanged()
+{
+    if (!isGrouped())
+    {
+        if (!m_achievements.isEmpty())
+        {
+            emit dataChanged(index(0, 0), index(rowCount() - 1, ColumnCount - 1));
+        }
+        return;
+    }
+    for (int s = 0; s < m_sections.size(); ++s)
+    {
+        const QModelIndex parent = index(s, 0);
+        emit dataChanged(index(0, 0, parent), index(rowCount(parent) - 1, ColumnCount - 1, parent));
+    }
 }
 
 AchievementFilterModel::AchievementFilterModel(QObject *parent) : QSortFilterProxyModel(parent)
 {
+    // A section is shown when any of its achievements is.
+    setRecursiveFilteringEnabled(true);
 }
 
 void AchievementFilterModel::setSearchText(const QString &text)
@@ -320,6 +519,10 @@ void AchievementFilterModel::setState(State state)
 bool AchievementFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     const QModelIndex index = sourceModel()->index(sourceRow, AchievementModel::NameColumn, sourceParent);
+    if (index.data(AchievementModel::SectionRole).toBool())
+    {
+        return false;
+    }
 
     switch (m_state)
     {

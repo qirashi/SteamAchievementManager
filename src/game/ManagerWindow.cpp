@@ -170,6 +170,7 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
 
     updateHeaderImage();
     updateSummary();
+    applyGroups(); // downloads in parallel with the stats request
     QTimer::singleShot(0, this, &ManagerWindow::refreshStats);
 }
 
@@ -321,8 +322,10 @@ QWidget *ManagerWindow::createAchievementsPage()
     m_achievementView = new QTreeView(page);
     m_achievementView->setModel(m_achievementFilter);
     m_achievementView->setItemDelegate(new AchievementDelegate(m_achievementView));
+    // Sections draw their own chevron; achievements aren't indented under them.
     m_achievementView->setRootIsDecorated(false);
-    m_achievementView->setUniformRowHeights(true);
+    m_achievementView->setIndentation(0);
+    m_achievementView->setExpandsOnDoubleClick(false);
     m_achievementView->setAllColumnsShowFocus(true);
     m_achievementView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_achievementView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -338,6 +341,32 @@ QWidget *ManagerWindow::createAchievementsPage()
     connect(
         m_achievementView, &QTreeView::customContextMenuRequested, this, &ManagerWindow::showAchievementContextMenu);
     layout->addWidget(m_achievementView, 1);
+
+    // Sections toggle on a single click and stay collapsed across filtering and reloads.
+    connect(m_achievementView, &QTreeView::clicked, this, [this](const QModelIndex &index) {
+        if (index.data(AchievementModel::SectionRole).toBool())
+        {
+            const QModelIndex section = index.siblingAtColumn(0);
+            m_achievementView->setExpanded(section, !m_achievementView->isExpanded(section));
+        }
+    });
+    connect(m_achievementView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
+        m_collapsedSections.remove(index.data().toString());
+    });
+    connect(m_achievementView, &QTreeView::collapsed, this, [this](const QModelIndex &index) {
+        m_collapsedSections.insert(index.data().toString());
+    });
+    connect(m_achievementFilter, &QAbstractItemModel::modelReset, this, [this] {
+        restoreSectionExpansion();
+        m_achievementView->scrollToTop();
+    });
+    connect(m_achievementFilter, &QAbstractItemModel::layoutChanged, this, &ManagerWindow::restoreSectionExpansion);
+    connect(m_achievementFilter, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &parent) {
+        if (!parent.isValid())
+        {
+            restoreSectionExpansion();
+        }
+    });
 
     auto *find = new QShortcut(QKeySequence::Find, page);
     connect(find, &QShortcut::activated, this, [this] {
@@ -376,6 +405,7 @@ QWidget *ManagerWindow::createStatisticsPage()
     m_statsView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed |
                                  QAbstractItemView::AnyKeyPressed);
     m_statsView->setAlternatingRowColors(true);
+    m_statsView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_statsView->setShowGrid(false);
     m_statsView->setWordWrap(false);
     m_statsView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -445,10 +475,20 @@ void ManagerWindow::createToolBar()
     settingsButton->setToolTip(tr("Settings"));
     settingsButton->setPopupMode(QToolButton::InstantPopup);
     auto *settingsMenu = createSettingsMenu(this);
+    QAction *first = settingsMenu->actions().value(0);
     m_languageMenu = createAchievementLanguageMenu(settingsMenu);
     m_languageMenu->setEnabled(false);
-    settingsMenu->insertMenu(settingsMenu->actions().value(0), m_languageMenu);
-    settingsMenu->insertSeparator(settingsMenu->actions().value(1));
+    settingsMenu->insertMenu(first, m_languageMenu);
+    m_groupAction =
+        new QAction(icons::get(QStringLiteral("grid")), tr("&Group by DLC (steamhunters.com)"), settingsMenu);
+    m_groupAction->setCheckable(true);
+    m_groupAction->setChecked(isGroupingEnabled());
+    connect(m_groupAction, &QAction::toggled, this, [this](bool checked) {
+        settings().setValue(QStringLiteral("game/groupAchievements"), checked);
+        applyGroups();
+    });
+    settingsMenu->insertAction(first, m_groupAction);
+    settingsMenu->insertSeparator(first);
     settingsButton->setMenu(settingsMenu);
     toolBar->addWidget(settingsButton);
 }
@@ -587,7 +627,7 @@ void ManagerWindow::onUserStatsReceived(const steam::UserStatsReceived &message)
     setBusy(false);
 
     showStatusMessage(tr("Retrieved %1 and %2.")
-                          .arg(tr("%n achievement(s)", nullptr, m_achievements->rowCount()),
+                          .arg(tr("%n achievement(s)", nullptr, m_achievements->achievementCount()),
                                tr("%n statistic(s)", nullptr, m_stats->rowCount())));
 }
 
@@ -653,7 +693,9 @@ void ManagerWindow::loadStatistics()
 
 void ManagerWindow::populateLanguages()
 {
-    fillAchievementLanguageMenu(m_languageMenu, m_schema->languages, m_steamLanguage, [this] { applyLanguage(); });
+    fillAchievementLanguageMenu(m_languageMenu, m_schema->languages, m_steamLanguage, [this] {
+        applyLanguage();
+    });
     m_languageMenu->setEnabled(!m_schema->languages.isEmpty());
     applyLanguage();
 }
@@ -674,6 +716,50 @@ void ManagerWindow::applyLanguage()
     const QString language = effectiveLanguage();
     m_achievements->setLanguage(language);
     m_stats->setLanguage(language);
+}
+
+bool ManagerWindow::isGroupingEnabled() const
+{
+    return settings().value(QStringLiteral("game/groupAchievements"), true).toBool();
+}
+
+void ManagerWindow::applyGroups()
+{
+    if (!isGroupingEnabled())
+    {
+        m_achievements->setGroups({});
+        return;
+    }
+    if (m_groups)
+    {
+        m_achievements->setGroups(*m_groups);
+        return;
+    }
+    if (m_groupsRequested)
+    {
+        return;
+    }
+    // Steam doesn't say which DLC an achievement belongs to; SteamHunters does.
+    m_groupsRequested = true;
+    requestAchievementGroups(m_appId, m_gameName, this, [this](QList<AchievementGroup> groups) {
+        m_groups = std::move(groups);
+        if (isGroupingEnabled())
+        {
+            m_achievements->setGroups(*m_groups);
+        }
+    });
+}
+
+void ManagerWindow::restoreSectionExpansion()
+{
+    for (int row = 0; row < m_achievementFilter->rowCount(); ++row)
+    {
+        const QModelIndex index = m_achievementFilter->index(row, 0);
+        if (index.data(AchievementModel::SectionRole).toBool())
+        {
+            m_achievementView->setExpanded(index, !m_collapsedSections.contains(index.data().toString()));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -856,12 +942,30 @@ void ManagerWindow::resetAllStats()
 
 QList<int> ManagerWindow::visibleAchievementRows() const
 {
+    // Achievements in collapsed sections aren't shown, so they're left alone.
     QList<int> rows;
-    const int count = m_achievementFilter->rowCount();
-    rows.reserve(count);
-    for (int row = 0; row < count; ++row)
+    for (int row = 0; row < m_achievementFilter->rowCount(); ++row)
     {
-        rows.append(m_achievementFilter->mapToSource(m_achievementFilter->index(row, 0)).row());
+        const QModelIndex index = m_achievementFilter->index(row, 0);
+        if (!index.data(AchievementModel::SectionRole).toBool())
+        {
+            rows.append(m_achievements->achievementIndex(m_achievementFilter->mapToSource(index)));
+        }
+        else if (m_achievementView->isExpanded(index))
+        {
+            rows.append(visibleSectionRows(index));
+        }
+    }
+    return rows;
+}
+
+QList<int> ManagerWindow::visibleSectionRows(const QModelIndex &section) const
+{
+    QList<int> rows;
+    for (int row = 0; row < m_achievementFilter->rowCount(section); ++row)
+    {
+        rows.append(m_achievements->achievementIndex(
+            m_achievementFilter->mapToSource(m_achievementFilter->index(row, 0, section))));
     }
     return rows;
 }
@@ -872,7 +976,11 @@ QList<int> ManagerWindow::selectedAchievementRows() const
     const auto selected = m_achievementView->selectionModel()->selectedRows();
     for (const auto &index : selected)
     {
-        rows.append(m_achievementFilter->mapToSource(index).row());
+        const int row = m_achievements->achievementIndex(m_achievementFilter->mapToSource(index));
+        if (row >= 0)
+        {
+            rows.append(row);
+        }
     }
     std::sort(rows.begin(), rows.end());
     return rows;
@@ -897,6 +1005,11 @@ void ManagerWindow::showAchievementContextMenu(const QPoint &position)
     const QModelIndex index = m_achievementView->indexAt(position);
     if (!index.isValid())
     {
+        return;
+    }
+    if (index.data(AchievementModel::SectionRole).toBool())
+    {
+        showSectionContextMenu(index.siblingAtColumn(0), position);
         return;
     }
     if (!m_achievementView->selectionModel()->isRowSelected(index.row(), index.parent()))
@@ -939,6 +1052,48 @@ void ManagerWindow::showAchievementContextMenu(const QPoint &position)
     menu.addAction(icons::get(QStringLiteral("copy")), tr("Copy &ID"), this, [id] {
         QGuiApplication::clipboard()->setText(id);
     });
+    menu.exec(m_achievementView->viewport()->mapToGlobal(position));
+}
+
+void ManagerWindow::showSectionContextMenu(const QModelIndex &section, const QPoint &position)
+{
+    // Applies to the section's achievements that pass the current filter.
+    const QList<int> rows = visibleSectionRows(section);
+
+    QMenu menu(this);
+    menu.addAction(icons::get(QStringLiteral("unlock")), tr("&Unlock all in this section"), this, [this, rows] {
+        applyToAchievements(rows, UnlockMode);
+    });
+    menu.addAction(icons::get(QStringLiteral("lock")), tr("&Lock all in this section"), this, [this, rows] {
+        applyToAchievements(rows, LockMode);
+    });
+    menu.addAction(icons::get(QStringLiteral("invert")), tr("&Invert this section"), this, [this, rows] {
+        applyToAchievements(rows, InvertMode);
+    });
+    menu.addSeparator();
+    menu.addAction(tr("&Expand all"), this, [this] {
+        m_collapsedSections.clear();
+        restoreSectionExpansion();
+    });
+    menu.addAction(tr("&Collapse all"), this, [this] {
+        for (int row = 0; row < m_achievementFilter->rowCount(); ++row)
+        {
+            const QModelIndex index = m_achievementFilter->index(row, 0);
+            if (index.data(AchievementModel::SectionRole).toBool())
+            {
+                m_achievementView->collapse(index);
+            }
+        }
+    });
+
+    const uint32_t dlcAppId = section.data(AchievementModel::SectionDlcRole).toUInt();
+    if (dlcAppId != 0)
+    {
+        menu.addSeparator();
+        menu.addAction(icons::get(QStringLiteral("external")), tr("Open DLC &store page"), this, [dlcAppId] {
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://store.steampowered.com/app/%1/").arg(dlcAppId)));
+        });
+    }
     menu.exec(m_achievementView->viewport()->mapToGlobal(position));
 }
 
@@ -988,7 +1143,7 @@ void ManagerWindow::setBusy(bool busy, const QString &message)
 
 void ManagerWindow::updateSummary()
 {
-    const int total = m_achievements->rowCount();
+    const int total = m_achievements->achievementCount();
     const int unlocked = m_achievements->checkedCount();
     const int achievementChanges = m_achievements->modifiedCount();
     const int statChanges = m_stats->modifiedCount();
@@ -1029,8 +1184,8 @@ void ManagerWindow::updateHeaderImage()
 {
     if (m_headerUrl.isEmpty())
     {
-        QString candidate = m_client.appData(
-            m_appId, QStringLiteral("small_capsule/%1").arg(m_steamLanguage).toUtf8().constData());
+        QString candidate =
+            m_client.appData(m_appId, QStringLiteral("small_capsule/%1").arg(m_steamLanguage).toUtf8().constData());
         if (candidate.isEmpty())
         {
             candidate = m_client.appData(m_appId, "small_capsule/english");

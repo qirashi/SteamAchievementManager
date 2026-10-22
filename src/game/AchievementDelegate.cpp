@@ -32,6 +32,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QTextLayout>
+#include <QTreeView>
 
 namespace sam
 {
@@ -45,6 +46,7 @@ constexpr int kCheckAreaWidth = kCheckSize + 2 * 10;
 const QColor kGreen(0x2e, 0xa0, 0x43);
 const QColor kOrange(0xd2, 0x8a, 0x22);
 const QColor kRed(0xd7, 0x3a, 0x49);
+const QColor kBlue(0x3b, 0x82, 0xf6);
 
 // Lays out `text` in at most `maxLines` lines, eliding the last one.
 QStringList wrapLines(const QString &text, const QFont &font, qreal width, int maxLines)
@@ -114,6 +116,13 @@ AchievementDelegate::AchievementDelegate(QObject *parent) : QStyledItemDelegate(
 
 QSize AchievementDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+    if (index.data(AchievementModel::SectionRole).toBool())
+    {
+        // Keep the unlock time column sized by the achievements only.
+        const int width = index.column() == AchievementModel::NameColumn ? 360 : 0;
+        return QSize(width, option.fontMetrics.height() * 3 / 2 + 2 * kPadding);
+    }
+
     QSize size = QStyledItemDelegate::sizeHint(option, index);
     const int textHeight = option.fontMetrics.height() * 3 + 6;
     size.setHeight(qMax(kIconSize, textHeight) + 2 * kPadding);
@@ -129,8 +138,136 @@ QRect AchievementDelegate::checkArea(const QStyleOptionViewItem &option) const
     return QRect(option.rect.left(), option.rect.top(), kCheckAreaWidth, option.rect.height());
 }
 
+void AchievementDelegate::paintSection(QPainter *painter,
+                                       const QStyleOptionViewItem &option,
+                                       const QModelIndex &index) const
+{
+    const QPalette &palette = option.palette;
+    const bool darkBase = palette.color(QPalette::Base).lightness() < 128;
+    const QRect rect = option.rect;
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+
+    // Band across the whole row, with a separator line on top.
+    QColor band = palette.color(QPalette::Text);
+    band.setAlphaF(darkBase ? 0.07f : 0.045f);
+    painter->fillRect(rect, band);
+    QColor line = palette.color(QPalette::Text);
+    line.setAlphaF(0.14f);
+    painter->fillRect(QRect(rect.left(), rect.top(), rect.width(), 1), line);
+
+    if (index.column() != AchievementModel::NameColumn)
+    {
+        painter->restore();
+        return;
+    }
+
+    const auto *view = qobject_cast<const QTreeView *>(option.widget);
+    const bool expanded = view != nullptr && view->isExpanded(index);
+    const int checked = index.data(AchievementModel::SectionCheckedRole).toInt();
+    const int total = index.data(AchievementModel::SectionTotalRole).toInt();
+    const bool modified = index.data(AchievementModel::ModifiedRole).toBool();
+    const bool complete = total > 0 && checked == total;
+    const QColor textColor = palette.color(QPalette::Text);
+    QColor secondary = textColor;
+    secondary.setAlphaF(0.68f);
+
+    // Chevron, centered where the achievement check boxes are.
+    const QPointF center(rect.left() + kCheckAreaWidth / 2.0, rect.center().y() + 0.5);
+    QPainterPath chevron;
+    if (expanded)
+    {
+        chevron.moveTo(center + QPointF(-4.5, -2));
+        chevron.lineTo(center + QPointF(0, 2.5));
+        chevron.lineTo(center + QPointF(4.5, -2));
+    }
+    else
+    {
+        chevron.moveTo(center + QPointF(-2, -4.5));
+        chevron.lineTo(center + QPointF(2.5, 0));
+        chevron.lineTo(center + QPointF(-2, 4.5));
+    }
+    painter->setPen(QPen(secondary, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter->setBrush(Qt::NoBrush);
+    painter->drawPath(chevron);
+
+    // Progress on the right: "3 / 5" and a thin bar.
+    constexpr int kBarWidth = 120;
+    QFont countFont = option.font;
+    const QString count = QStringLiteral("%1 / %2").arg(checked).arg(total);
+    const QFontMetricsF countMetrics(countFont);
+    const qreal countWidth = countMetrics.horizontalAdvance(count);
+    const qreal barLeft = rect.right() - kPadding - kBarWidth;
+    const QRectF barRect(barLeft, rect.center().y() - 2, kBarWidth, 5);
+    QColor trough = textColor;
+    trough.setAlphaF(0.12f);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(trough);
+    painter->drawRoundedRect(barRect, 2.5, 2.5);
+    if (checked > 0)
+    {
+        painter->setBrush(complete ? kGreen : kBlue);
+        painter->drawRoundedRect(
+            QRectF(barRect.topLeft(), QSizeF(barRect.width() * checked / total, barRect.height())), 2.5, 2.5);
+    }
+    painter->setFont(countFont);
+    painter->setPen(complete ? (darkBase ? kGreen.lighter(140) : kGreen.darker(110)) : secondary);
+    const QRectF countRect(barLeft - 10 - countWidth, rect.top(), countWidth + 1, rect.height());
+    painter->drawText(countRect, Qt::AlignRight | Qt::AlignVCenter, count);
+
+    // Name and badges.
+    QFont nameFont = option.font;
+    nameFont.setBold(true);
+    const QFontMetricsF nameMetrics(nameFont);
+    QFont badgeFont = option.font;
+    badgeFont.setPointSizeF(option.font.pointSizeF() * 0.82);
+
+    QList<Badge> badges;
+    if (index.data(AchievementModel::SectionDlcRole).toUInt() != 0)
+    {
+        badges.append({QStringLiteral("DLC"), kBlue});
+    }
+    if (modified)
+    {
+        badges.append({tr("changed"), kOrange});
+    }
+    qreal badgesWidth = 0;
+    for (const auto &badge : badges)
+    {
+        badgesWidth += QFontMetricsF(badgeFont).horizontalAdvance(badge.text) + 12 + 6;
+    }
+
+    const qreal textLeft = rect.left() + kCheckAreaWidth;
+    const qreal available = countRect.left() - 16 - textLeft;
+    const QString name = index.data(Qt::DisplayRole).toString();
+    const qreal nameWidth = qMin(nameMetrics.horizontalAdvance(name), qMax(40.0, available - badgesWidth));
+    painter->setFont(nameFont);
+    painter->setPen(textColor);
+    const QRectF nameRect(textLeft, rect.top(), nameWidth + 1, rect.height());
+    painter->drawText(
+        nameRect, Qt::AlignLeft | Qt::AlignVCenter, nameMetrics.elidedText(name, Qt::ElideRight, nameWidth + 1));
+
+    qreal badgeX = nameRect.right() + 8;
+    for (const auto &badge : badges)
+    {
+        if (badgeX > countRect.left() - 30)
+        {
+            break;
+        }
+        badgeX += drawBadge(painter, badgeFont, badge, badgeX, nameRect.center().y(), darkBase) + 6;
+    }
+
+    painter->restore();
+}
+
 void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+    if (index.data(AchievementModel::SectionRole).toBool())
+    {
+        paintSection(painter, option, index);
+        return;
+    }
     if (index.column() != AchievementModel::NameColumn)
     {
         QStyledItemDelegate::paint(painter, option, index);

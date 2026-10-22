@@ -77,6 +77,8 @@ target_link_libraries(SAM.Picker PRIVATE sam_core)
 qt_add_executable(SAM.Game WIN32
     src/game/AchievementDelegate.cpp
     src/game/AchievementDelegate.h
+    src/game/AchievementGroups.cpp
+    src/game/AchievementGroups.h
     src/game/AchievementModel.cpp
     src/game/AchievementModel.h
     src/game/ManagerWindow.cpp

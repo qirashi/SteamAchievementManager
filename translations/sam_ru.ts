@@ -90,6 +90,10 @@
 <context>
     <name>sam::AchievementDelegate</name>
     <message>
+        <source>changed</source>
+        <translation>изменено</translation>
+    </message>
+    <message>
         <source>will unlock</source>
         <translation>будет получено</translation>
     </message>
@@ -119,6 +123,10 @@
     <message>
         <source>Unlocked on</source>
         <translation>Получено</translation>
+    </message>
+    <message>
+        <source>Base game</source>
+        <translation>Основная игра</translation>
     </message>
 </context>
 <context>
@@ -246,6 +254,10 @@
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>&amp;Group by DLC (steamhunters.com)</source>
+        <translation>&amp;Группировать по DLC (steamhunters.com)</translation>
     </message>
     <message>
         <source>Unsaved changes</source>
@@ -382,6 +394,30 @@
     <message>
         <source>Copy &amp;ID</source>
         <translation>Копировать &amp;ID</translation>
+    </message>
+    <message>
+        <source>&amp;Unlock all in this section</source>
+        <translation>&amp;Получить все в этом разделе</translation>
+    </message>
+    <message>
+        <source>&amp;Lock all in this section</source>
+        <translation>&amp;Снять все в этом разделе</translation>
+    </message>
+    <message>
+        <source>&amp;Invert this section</source>
+        <translation>&amp;Инвертировать раздел</translation>
+    </message>
+    <message>
+        <source>&amp;Expand all</source>
+        <translation>&amp;Развернуть все</translation>
+    </message>
+    <message>
+        <source>&amp;Collapse all</source>
+        <translation>С&amp;вернуть все</translation>
+    </message>
+    <message>
+        <source>Open DLC &amp;store page</source>
+        <translation>Открыть страницу DLC в &amp;магазине</translation>
     </message>
     <message>
         <source>&amp;Edit value</source>
