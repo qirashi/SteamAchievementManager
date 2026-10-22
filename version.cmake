@@ -3,7 +3,7 @@
 # What changed in each version: CHANGELOG.md.
 
 # This port. Bump it for every release and add an entry to CHANGELOG.md.
-set(SAM_VERSION 1.0.0)
+set(SAM_VERSION 1.0.1)
 
 # The original program (github.com/gibbed/SteamAchievementManager) the port is
 # in sync with: its release tag and commit. Update them when changes from the

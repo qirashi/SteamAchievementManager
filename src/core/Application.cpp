@@ -64,7 +64,7 @@ void applyTheme(Theme theme)
         case Theme::Light: hints->setColorScheme(Qt::ColorScheme::Light); break;
         case Theme::Dark: hints->setColorScheme(Qt::ColorScheme::Dark); break;
     }
-    applyColorScheme(hints->colorScheme() == Qt::ColorScheme::Dark);
+    applyColorScheme(hints->colorScheme() == Qt::ColorScheme::Dark, theme == Theme::System);
 }
 
 void installTranslations(QApplication &app)
@@ -164,7 +164,7 @@ void initializeApplication(QApplication &app, const QString &component)
     // palette on such a change, so ours goes back on afterwards.
     QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, &app, [](Qt::ColorScheme scheme) {
         QTimer::singleShot(0, qApp, [scheme] {
-            applyColorScheme(scheme == Qt::ColorScheme::Dark);
+            applyColorScheme(scheme == Qt::ColorScheme::Dark, g_appliedTheme == Theme::System);
         });
     });
     installTranslations(app);

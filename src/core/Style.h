@@ -23,6 +23,7 @@
 #pragma once
 
 class QApplication;
+class QColor;
 
 namespace sam
 {
@@ -35,6 +36,10 @@ namespace sam
 void installStyle(QApplication &app);
 
 // Applies the palette and style sheet of the dark ("Dark Modern") or the light
-// theme.
-void applyColorScheme(bool dark);
+// theme. `systemAccent` takes the selection and accent colors from Windows
+// (and follows them when they change) instead of our blue.
+void applyColorScheme(bool dark, bool systemAccent);
+
+// The color of progress bars and similar marks in the current theme.
+QColor accentColor();
 } // namespace sam

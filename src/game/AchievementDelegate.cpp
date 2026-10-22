@@ -26,6 +26,7 @@
 
 #include "AchievementModel.h"
 #include "Icons.h"
+#include "Style.h"
 
 #include <QMouseEvent>
 #include <QPainter>
@@ -309,7 +310,7 @@ void AchievementDelegate::paintSection(QPainter *painter,
     painter->drawRoundedRect(barRect, 2.5, 2.5);
     if (checked > 0)
     {
-        painter->setBrush(complete ? kGreen : kBlue);
+        painter->setBrush(complete ? kGreen : accentColor());
         painter->drawRoundedRect(
             QRectF(barRect.topLeft(), QSizeF(barRect.width() * checked / total, barRect.height())), 2.5, 2.5);
     }

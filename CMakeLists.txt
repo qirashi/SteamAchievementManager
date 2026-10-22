@@ -29,6 +29,9 @@ qt_standard_project_setup(REQUIRES 6.10)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 configure_file(src/core/Version.h.in "${CMAKE_BINARY_DIR}/generated/Version.h" @ONLY)
+# The resource compiler doesn't report the headers it reads: rebuild the file
+# properties of the executables when the version changes.
+set_source_files_properties(resources/SAM.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/generated/Version.h")
 
 # ---------------------------------------------------------------------------
 # Shared code: Steam client bindings, schema parser, image cache, styling.

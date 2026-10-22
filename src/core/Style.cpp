@@ -23,6 +23,7 @@
 #include "Style.h"
 
 #include <QAbstractItemView>
+#include <QAbstractNativeEventFilter>
 #include <QAbstractScrollArea>
 #include <QApplication>
 #include <QEasingCurve>
@@ -39,6 +40,10 @@
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <array>
+#include <optional>
+
+#include <windows.h>
 
 namespace sam
 {
@@ -53,6 +58,64 @@ constexpr int kMenuIndicatorRadius = 3;
 QString colorName(const QColor &color)
 {
     return color.name(QColor::HexRgb);
+}
+
+// The scheme in use, and the accent color that goes with it.
+bool g_dark = false;
+bool g_systemAccent = false;
+QColor g_accent;
+
+// Windows' accent color in the shades it uses itself, from light to dark:
+// Light3, Light2, Light1, the accent, Dark1, Dark2, Dark3.
+std::optional<std::array<QColor, 7>> systemAccentShades()
+{
+    std::array<QColor, 7> shades;
+    BYTE palette[32] = {};
+    DWORD size = sizeof(palette);
+    if (RegGetValueW(HKEY_CURRENT_USER,
+                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent",
+                     L"AccentPalette",
+                     RRF_RT_REG_BINARY,
+                     nullptr,
+                     palette,
+                     &size) == ERROR_SUCCESS &&
+        size >= 4 * shades.size())
+    {
+        for (size_t i = 0; i < shades.size(); ++i)
+        {
+            shades[i] = QColor(palette[4 * i], palette[4 * i + 1], palette[4 * i + 2]);
+        }
+        return shades;
+    }
+
+    // Older systems only have the accent itself, as 0xAABBGGRR.
+    DWORD abgr = 0;
+    size = sizeof(abgr);
+    if (RegGetValueW(HKEY_CURRENT_USER,
+                     L"Software\\Microsoft\\Windows\\DWM",
+                     L"AccentColor",
+                     RRF_RT_REG_DWORD,
+                     nullptr,
+                     &abgr,
+                     &size) != ERROR_SUCCESS)
+    {
+        return std::nullopt;
+    }
+    const QColor accent(abgr & 0xFF, (abgr >> 8) & 0xFF, (abgr >> 16) & 0xFF);
+    shades = {accent.lighter(190),
+              accent.lighter(160),
+              accent.lighter(130),
+              accent,
+              accent.darker(120),
+              accent.darker(145),
+              accent.darker(175)};
+    return shades;
+}
+
+// Text over `background`: white over dark colors, black over light ones.
+QColor textOver(const QColor &background, const QColor &dark)
+{
+    return background.lightnessF() > 0.6 ? dark : QColor(Qt::white);
 }
 
 // The outline of a check box, the way Fusion takes it from the window color
@@ -515,7 +578,7 @@ private:
     }
 };
 // The palettes of the dark ("Dark Modern") and the light theme.
-QPalette themePalette(const QColor &window, bool dark)
+QPalette themePalette(const QColor &window, bool dark, const QColor &highlight)
 {
     QPalette palette(window);
     const QColor text = dark ? QColor(0xF2, 0xF2, 0xF2) : QColor(Qt::black);
@@ -548,10 +611,11 @@ QPalette themePalette(const QColor &window, bool dark)
     palette.setColor(QPalette::BrightText, Qt::red);
     palette.setColor(QPalette::Link, dark ? QColor(0x2A, 0x82, 0xDA) : QColor(Qt::blue));
 
-    palette.setColor(QPalette::Highlight, dark ? QColor(0x37, 0x63, 0xAD) : QColor(0x88, 0xBB, 0xFF));
+    palette.setColor(QPalette::Highlight, highlight);
+    palette.setColor(QPalette::Accent, g_accent);
     palette.setColor(QPalette::Inactive, QPalette::Highlight, dark ? disabledText : window.darker(120));
     palette.setColor(QPalette::Disabled, QPalette::Highlight, dark ? disabledText : window.darker(120));
-    palette.setColor(QPalette::HighlightedText, dark ? QColor(Qt::white) : text);
+    palette.setColor(QPalette::HighlightedText, textOver(highlight, text));
     palette.setColor(QPalette::Disabled, QPalette::HighlightedText, dark ? QColor(0xC0, 0xC0, 0xC0) : disabledText);
     return palette;
 }
@@ -599,7 +663,7 @@ QString menuIndicatorStyle(const QColor &window, bool dark)
 // Rounded blocks: every tool bar of a window (the way Visual Studio has them),
 // the header of the game window, the lists of achievements and statistics and
 // the caption in the title bar.
-QString blockStyle(const QColor &window, bool dark)
+QString blockStyle(const QColor &window, bool dark, const QColor &accent)
 {
     const QColor toolBar = dark ? window.darker(102) : window.lighter(103);
     const QColor border = dark ? window.darker(139) : window.darker(118);
@@ -616,39 +680,84 @@ QString blockStyle(const QColor &window, bool dark)
                           // Like the progress of the sections of the achievement list.
                           "#gameHeader QProgressBar { background: rgba(128, 128, 128, 50); border: none;"
                           " border-radius: 4px; }\n"
-                          "#gameHeader QProgressBar::chunk { background: #3b82f6; border-radius: 4px; }\n"
+                          "#gameHeader QProgressBar::chunk { background: %6; border-radius: 4px; }\n"
                           "#titleBarCaption { background: %3; border: 1px solid %2; }\n"
                           "#listBlock { background: palette(base); border: 1px solid %2; border-radius: 8px; }\n"
                           "#listBlock QAbstractItemView { background: transparent; border: none; }\n"
                           "#listBlock QHeaderView { background: transparent; border: none; }\n"
                           "#listBlock QHeaderView::section { background: transparent; color: %4; border: none;"
                           " border-bottom: 1px solid %5; padding: 5px 10px; }\n")
-        .arg(colorName(toolBar), colorName(border), colorName(caption), textAlpha(150), textAlpha(dark ? 26 : 30));
+        .arg(colorName(toolBar), colorName(border), colorName(caption), textAlpha(150), textAlpha(dark ? 26 : 30))
+        .arg(colorName(accent));
 }
+// Windows tells the windows when the accent color changes; the palette is
+// rebuilt once all of them (and Qt) have had the message.
+class AccentFilter : public QAbstractNativeEventFilter
+{
+public:
+    bool nativeEventFilter(const QByteArray &, void *message, qintptr *) override
+    {
+        const MSG *msg = static_cast<const MSG *>(message);
+        if (msg->message != WM_SETTINGCHANGE || msg->lParam == 0 || !g_systemAccent || m_pending ||
+            std::wcscmp(reinterpret_cast<const wchar_t *>(msg->lParam), L"ImmersiveColorSet") != 0)
+        {
+            return false;
+        }
+        m_pending = true;
+        QTimer::singleShot(0, qApp, [this] {
+            m_pending = false;
+            applyColorScheme(g_dark, g_systemAccent);
+        });
+        return false;
+    }
+
+private:
+    bool m_pending = false;
+};
 } // namespace
 
 void installStyle(QApplication &app)
 {
     QApplication::setStyle(new ApplicationStyle);
     app.installEventFilter(new StyleFilter(&app));
+    app.installNativeEventFilter(new AccentFilter);
 }
 
-void applyColorScheme(bool dark)
+void applyColorScheme(bool dark, bool systemAccent)
 {
+    g_dark = dark;
+    g_systemAccent = systemAccent;
+
     const QColor window = dark ? QColor(0x2B, 0x2B, 0x2B) : QColor(0xF0, 0xF0, 0xF0);
     const QColor menu = dark ? window.darker(115) : window.lighter(104);
     const QColor menuBorder = dark ? window.lighter(140) : window.darker(125);
     const QColor menuSelected = dark ? window.lighter(125) : window.darker(108);
     const QColor menuSeparator = dark ? window.lighter(130) : window.darker(112);
 
+    // Selection and checked buttons, and the color of progress: our blue in a
+    // chosen theme, the Windows accent when following the system.
+    QColor highlight = dark ? QColor(0x37, 0x63, 0xAD) : QColor(0x88, 0xBB, 0xFF);
+    g_accent = QColor(0x3b, 0x82, 0xf6);
+    if (const auto shades = systemAccent ? systemAccentShades() : std::nullopt)
+    {
+        // The shades Windows itself uses with each scheme.
+        highlight = dark ? (*shades)[3] : (*shades)[0];
+        g_accent = dark ? (*shades)[2] : (*shades)[3];
+    }
+
     QString sheet = menuStyle(menu, menuSelected, menuSeparator, menuBorder) + menuIndicatorStyle(window, dark) +
-                    blockStyle(window, dark);
+                    blockStyle(window, dark, g_accent);
     if (dark)
     {
         sheet += QStringLiteral("QToolTip { color: #e0e0e0; background-color: #373737; border: 1px solid #4c4c4c; }\n");
     }
 
-    QApplication::setPalette(themePalette(window, dark));
+    QApplication::setPalette(themePalette(window, dark, highlight));
     qApp->setStyleSheet(sheet);
+}
+
+QColor accentColor()
+{
+    return g_accent.isValid() ? g_accent : QColor(0x3b, 0x82, 0xf6);
 }
 } // namespace sam
