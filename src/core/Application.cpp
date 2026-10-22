@@ -124,19 +124,28 @@ void showAbout(QWidget *parent)
     box.setIconPixmap(QApplication::windowIcon().pixmap(64, 64));
     box.setTextFormat(Qt::RichText);
     box.setText(QStringLiteral("<h3>Steam Achievement Manager %1</h3>").arg(QStringLiteral(SAM_VERSION_STRING)));
-    box.setInformativeText(QCoreApplication::translate(
-                               "Application",
-                               "A lightweight tool to manage achievements and statistics of your Steam games.<br><br>"
-                               "Original program by Rick (gibbed), released under the zlib license.<br>"
-                               "This is a modified Qt %1 version.<br><br>"
-                               "<a href=\"https://github.com/gibbed/SteamAchievementManager\">"
-                               "github.com/gibbed/SteamAchievementManager</a>")
-                               .arg(QString::fromLatin1(qVersion())) +
-                           QStringLiteral("<br><br>") +
-                           QCoreApplication::translate("Application",
-                                                       "Qt is used under the GNU LGPL version 3; the licenses of Qt "
-                                                       "and its components are in THIRD-PARTY-NOTICES.txt and the "
-                                                       "\"licenses\" folder next to the program."));
+    const auto link = [](const char *url) {
+        const QString target = QString::fromLatin1(url);
+        return QStringLiteral("<a href=\"%1\">%2</a>").arg(target, QString(target).remove(QStringLiteral("https://")));
+    };
+    box.setInformativeText(
+        QCoreApplication::translate("Application",
+                                    "A lightweight tool to manage achievements and statistics of your Steam games.") +
+        QStringLiteral("<br><br>") +
+        QCoreApplication::translate("Application",
+                                    "Qt %1 port, based on the original Steam Achievement Manager %2 (commit %3) "
+                                    "by Rick (gibbed), released under the zlib license.")
+            .arg(QString::fromLatin1(qVersion()),
+                 QStringLiteral(SAM_UPSTREAM_VERSION_STRING),
+                 QStringLiteral(SAM_UPSTREAM_COMMIT_STRING)) +
+        QStringLiteral("<br><br>") +
+        QCoreApplication::translate("Application", "This version: %1<br>Original: %2")
+            .arg(link(SAM_REPOSITORY_URL), link(SAM_UPSTREAM_URL)) +
+        QStringLiteral("<br><br>") +
+        QCoreApplication::translate("Application",
+                                    "Qt is used under the GNU LGPL version 3; the licenses of Qt "
+                                    "and its components are in THIRD-PARTY-NOTICES.txt and the "
+                                    "\"licenses\" folder next to the program."));
     box.exec();
 }
 } // namespace

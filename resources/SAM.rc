@@ -16,10 +16,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName",      "Gibbed"
+            VALUE "CompanyName",      "Qirashi"
+            VALUE "Comments",         SAM_UPSTREAM_DESCRIPTION
             VALUE "FileDescription",  "Steam Achievement Manager"
             VALUE "FileVersion",      SAM_VERSION_STRING
-            VALUE "LegalCopyright",   "Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)"
+            VALUE "LegalCopyright",   "Copyright (c) 2024 Rick (gibbed), (c) 2026 Qirashi. zlib license."
             VALUE "ProductName",      "Steam Achievement Manager"
             VALUE "ProductVersion",   SAM_VERSION_STRING
         END

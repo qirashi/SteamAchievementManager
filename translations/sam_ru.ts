@@ -8,8 +8,16 @@
         <translation>О программе Steam Achievement Manager</translation>
     </message>
     <message>
-        <source>A lightweight tool to manage achievements and statistics of your Steam games.&lt;br&gt;&lt;br&gt;Original program by Rick (gibbed), released under the zlib license.&lt;br&gt;This is a modified Qt %1 version.&lt;br&gt;&lt;br&gt;&lt;a href="https://github.com/gibbed/SteamAchievementManager"&gt;github.com/gibbed/SteamAchievementManager&lt;/a&gt;</source>
-        <translation>Лёгкая программа для управления достижениями и статистикой ваших игр в Steam.&lt;br&gt;&lt;br&gt;Оригинальная программа — Rick (gibbed), распространяется по лицензии zlib.&lt;br&gt;Это изменённая версия на Qt %1.&lt;br&gt;&lt;br&gt;&lt;a href="https://github.com/gibbed/SteamAchievementManager"&gt;github.com/gibbed/SteamAchievementManager&lt;/a&gt;</translation>
+        <source>A lightweight tool to manage achievements and statistics of your Steam games.</source>
+        <translation>Лёгкая программа для управления достижениями и статистикой ваших игр в Steam.</translation>
+    </message>
+    <message>
+        <source>Qt %1 port, based on the original Steam Achievement Manager %2 (commit %3) by Rick (gibbed), released under the zlib license.</source>
+        <translation>Порт на Qt %1, основан на оригинальном Steam Achievement Manager %2 (коммит %3) от Rick (gibbed), распространяется по лицензии zlib.</translation>
+    </message>
+    <message>
+        <source>This version: %1&lt;br&gt;Original: %2</source>
+        <translation>Эта версия: %1&lt;br&gt;Оригинал: %2</translation>
     </message>
     <message>
         <source>Qt is used under the GNU LGPL version 3; the licenses of Qt and its components are in THIRD-PARTY-NOTICES.txt and the "licenses" folder next to the program.</source>

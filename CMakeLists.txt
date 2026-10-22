@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 
+include(version.cmake)
+
 project(SteamAchievementManager
-    VERSION 8.0.0
+    VERSION ${SAM_VERSION}
     DESCRIPTION "Steam Achievement Manager (Qt 6)"
     LANGUAGES CXX)
 
