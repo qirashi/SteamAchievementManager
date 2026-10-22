@@ -148,3 +148,7 @@ foreach(target IN ITEMS SAM.Picker SAM.Game)
     install(SCRIPT ${deploy_script})
 endforeach()
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt" DESTINATION .)
+# Qt is used under the LGPL: its notices travel with the libraries.
+configure_file(resources/THIRD-PARTY-NOTICES.txt.in THIRD-PARTY-NOTICES.txt @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/THIRD-PARTY-NOTICES.txt" DESTINATION .)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/licenses/" DESTINATION licenses)

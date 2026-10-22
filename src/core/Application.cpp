@@ -131,7 +131,12 @@ void showAbout(QWidget *parent)
                                "This is a modified Qt %1 version.<br><br>"
                                "<a href=\"https://github.com/gibbed/SteamAchievementManager\">"
                                "github.com/gibbed/SteamAchievementManager</a>")
-                               .arg(QString::fromLatin1(qVersion())));
+                               .arg(QString::fromLatin1(qVersion())) +
+                           QStringLiteral("<br><br>") +
+                           QCoreApplication::translate("Application",
+                                                       "Qt is used under the GNU LGPL version 3; the licenses of Qt "
+                                                       "and its components are in THIRD-PARTY-NOTICES.txt and the "
+                                                       "\"licenses\" folder next to the program."));
     box.exec();
 }
 } // namespace
@@ -288,6 +293,7 @@ QMenu *createSettingsMenu(QWidget *parent)
     QObject::connect(about, &QAction::triggered, menu, [parent] {
         showAbout(parent);
     });
+    menu->addAction(QCoreApplication::translate("Application", "About &Qt..."), qApp, &QApplication::aboutQt);
     return menu;
 }
 

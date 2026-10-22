@@ -12,6 +12,10 @@
         <translation>Лёгкая программа для управления достижениями и статистикой ваших игр в Steam.&lt;br&gt;&lt;br&gt;Оригинальная программа — Rick (gibbed), распространяется по лицензии zlib.&lt;br&gt;Это изменённая версия на Qt %1.&lt;br&gt;&lt;br&gt;&lt;a href="https://github.com/gibbed/SteamAchievementManager"&gt;github.com/gibbed/SteamAchievementManager&lt;/a&gt;</translation>
     </message>
     <message>
+        <source>Qt is used under the GNU LGPL version 3; the licenses of Qt and its components are in THIRD-PARTY-NOTICES.txt and the "licenses" folder next to the program.</source>
+        <translation>Qt используется по лицензии GNU LGPL версии 3; лицензии Qt и его компонентов — в THIRD-PARTY-NOTICES.txt и папке «licenses» рядом с программой.</translation>
+    </message>
+    <message>
         <source>&amp;Theme</source>
         <translation>&amp;Тема</translation>
     </message>
@@ -42,6 +46,10 @@
     <message>
         <source>&amp;About...</source>
         <translation>&amp;О программе…</translation>
+    </message>
+    <message>
+        <source>About &amp;Qt...</source>
+        <translation>О &amp;Qt…</translation>
     </message>
     <message>
         <source>&amp;Achievement language</source>

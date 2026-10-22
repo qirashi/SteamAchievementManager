@@ -73,3 +73,10 @@ build.bat debug    :: Debug   → папка release-debug\
 
 - Настройки: `%APPDATA%\SAM\SteamAchievementManager.ini`
 - Кэш картинок и списка игр: `%LOCALAPPDATA%\SAM\SteamAchievementManager\`
+
+## Лицензия
+
+Программа распространяется по лицензии zlib (`LICENSE.txt`), как и оригинал.
+Qt используется по лицензии GNU LGPL v3 и подключается динамически: библиотеки Qt в папке
+релиза можно заменить своей сборкой совместимой версии. Тексты лицензий Qt и входящих в него
+сторонних компонентов — в `THIRD-PARTY-NOTICES.txt` и папке `licenses\` рядом с программой.

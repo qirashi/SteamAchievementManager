@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+/* Copyright (c) 2026 Qirashi
  *
  * This software is provided 'as-is', without any express or implied
  * warranty. In no event will the authors be held liable for any damages
@@ -18,8 +18,6 @@
  *
  * 3. This notice may not be removed or altered from any source
  *    distribution.
- *
- * Altered source version: Qt 6 port of Steam Achievement Manager.
  */
 
 // SAM.Game copies this program under the executable name of a game and runs

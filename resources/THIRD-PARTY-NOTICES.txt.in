@@ -1,0 +1,45 @@
+Steam Achievement Manager — third-party notices
+===============================================
+
+Steam Achievement Manager is distributed under the zlib license (LICENSE.txt).
+It uses the following third-party software.
+
+
+Qt
+--
+
+Version @Qt6_VERSION@, https://www.qt.io/
+Copyright (C) The Qt Company Ltd. and other contributors.
+
+The Qt libraries next to the executables (Qt6Core.dll, Qt6Gui.dll,
+Qt6Network.dll, Qt6Svg.dll, Qt6Widgets.dll, the files in the "plugins"
+folder and translations\qt_*.qm) are used under the GNU Lesser General
+Public License version 3 (licenses\LGPL-3.0.txt), which supplements the
+GNU General Public License version 3 (licenses\GPL-3.0.txt).
+
+The Qt libraries are unmodified and linked dynamically: you may replace
+them with your own build of a compatible Qt version.
+
+The source code of Qt @Qt6_VERSION@ is available at
+https://download.qt.io/official_releases/qt/
+and https://code.qt.io/.
+
+The Qt libraries contain third-party code under their own licenses; their
+notices are in licenses\Qt-third-party.txt.
+
+
+Steam
+-----
+
+Steam Achievement Manager talks to the Steam client already installed on the
+computer (steamclient64.dll). No Valve code is distributed with it. Steam and
+the Steam logo are trademarks of Valve Corporation.
+
+
+Online services
+---------------
+
+Game names and images come from the Steam client and Valve's CDN; the list of
+games from gib.me; achievement groups (DLC sections) from steamhunters.com;
+and, when "Show the game in Discord" is on, the list of games Discord detects
+from discord.com. No data of these services is distributed with the program.
