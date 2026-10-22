@@ -1,20 +1,60 @@
-# Steam Achievement Manager
+# Steam Achievement Manager — Qt 6
 
-Steam Achievement Manager (SAM) is a lightweight, portable application used to manage achievements and statistics in the popular PC gaming platform Steam. This application requires the [Steam client](https://store.steampowered.com/about/), a Steam account and network access. Steam must be running and the user must be logged in.
+Steam Achievement Manager (SAM) — лёгкая портативная программа для управления
+достижениями и статистикой игр в Steam. Нужен запущенный клиент Steam с выполненным входом.
 
-This is the code for SAM. The closed-source version originally released in 2008, last major release in 2011, and last updated in 2013 (a hotfix).
+Это порт [оригинального SAM](https://github.com/gibbed/SteamAchievementManager)
+(Rick «gibbed», лицензия zlib) с WinForms (.NET) на C++/Qt 6, стиль Fusion.
+Работает как оригинал: `SAM.Picker.exe` показывает список ваших игр,
+`SAM.Game.exe <AppID>` управляет достижениями и статистикой одной игры.
 
-The code is being made available so that those interested can do as they like with it.
+## Что нового по сравнению с оригиналом
 
-There are some changes to the code since the last closed-source release:
-- General code maintenance to bring it into a more modern state.
-- Icons have been replaced with ones from the Fugue Icons set.
-- Version has been bumped to 7.0.x.x to indicate the open-source release.
+- Стиль Fusion со светлой и тёмной темой (следует за Windows или выбирается вручную).
+- **Выбор языка достижений** (меню ☰ → «Язык достижений»): в окне игры список языков
+  берётся из её схемы, по умолчанию используется язык Steam; выбор общий и запоминается.
+- Интерфейс на русском и английском (меню ☰ → «Язык интерфейса»).
+- Список игр плитками: обложки грузятся параллельно и кэшируются на диске,
+  размер плиток меняется ползунком или Ctrl + колесом мыши, поиск по названию или App ID,
+  контекстное меню (страница в магазине, библиотека Steam, копирование ID).
+- Список игр с прошлого запуска показывается сразу, свежий скачивается в фоне.
+- Менеджер: шапка с обложкой и прогрессом, поиск по названию/описанию/ID,
+  фильтр «Все / Не получены / Получены / Изменённые», бейджи
+  «будет получено / будет снято / защищено / скрытое», иконка меняется вместе с галочкой,
+  множественный выбор (Space переключает выделенные), двойной клик переключает строку.
+- Перед сохранением показывается сводка изменений; при закрытии с несохранёнными
+  изменениями программа спрашивает, что с ними делать.
+- Статистика: подсветка изменённых значений, проверка диапазона min/max из схемы,
+  «Вернуть исходное значение» в контекстном меню.
+- 64-битная сборка (`steamclient64.dll`).
 
-[Download latest release](https://github.com/gibbed/SteamAchievementManager/releases/latest).
+## Сборка
 
-[![Build status](https://ci.appveyor.com/api/projects/status/00vic6jliar6j0ol/branch/master?svg=true)](https://ci.appveyor.com/project/gibbed/steamachievementmanager/branch/master)
+Нужны Visual Studio 2026 с нагрузкой «Разработка классических приложений на C++»
+и Qt 6.10+ для MSVC x64 (модули Widgets, Network, Svg, Qt Linguist).
+Переменная `QT6_HOME_64` должна указывать на Qt, например `C:\Qt\6.10.0\msvc2022_64`
+(сборки Qt для MSVC 2022 совместимы с компилятором VS 2026).
 
-## Attribution
+```bat
+build.bat          :: Release → папка release\
+build.bat debug    :: Debug   → папка release-debug\
+```
 
-Most (if not all) icons are from the [Fugue Icons](https://p.yusukekamiyamane.com/) set.
+Батник сам находит VS 2026, собирает проект (CMake + Ninja) и копирует рядом
+с exe всё нужное из Qt — папку `release` можно переносить куда угодно.
+Нужен установленный Microsoft Visual C++ Redistributable 2015–2022
+(обычно уже стоит вместе со Steam).
+
+Можно открыть папку в Visual Studio или Qt Creator — используются пресеты из `CMakePresets.json`.
+
+Иконка: исходник `resources/SAM.svg`, в сборку попадает `resources/SAM.ico`
+(и в exe, и в окна программы).
+
+Перевод: после изменения строк в коде выполните
+`cmake --build build\release --target update_translations` и заполните
+`translations/sam_ru.ts` (например, в Qt Linguist).
+
+## Где хранятся данные
+
+- Настройки: `%APPDATA%\SAM\SteamAchievementManager.ini`
+- Кэш картинок и списка игр: `%LOCALAPPDATA%\SAM\SteamAchievementManager\`
