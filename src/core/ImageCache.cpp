@@ -111,8 +111,12 @@ void ImageCache::onFinished(QNetworkReply *reply, const QString &url)
     if (reply->error() == QNetworkReply::NoError)
     {
         QImageReader reader(reply);
-        reader.setAutoTransform(true);
-        image = reader.read();
+        // Steam serves JPEG and PNG; downloaded data doesn't reach the other decoders.
+        if (const QByteArray format = reader.format(); format == "jpeg" || format == "png")
+        {
+            reader.setAutoTransform(true);
+            image = reader.read();
+        }
     }
 
     if (image.isNull())

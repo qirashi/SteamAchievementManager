@@ -46,6 +46,7 @@ const QColor kGreen(0x2e, 0xa0, 0x43);
 const QColor kOrange(0xd2, 0x8a, 0x22);
 const QColor kRed(0xd7, 0x3a, 0x49);
 const QColor kBlue(0x3b, 0x82, 0xf6);
+const QColor kPurple(0x8b, 0x5c, 0xf6);
 
 // A section and its achievements are painted as one rounded card, inset from
 // the sides of the list; a gap above each section separates the cards.
@@ -116,12 +117,20 @@ struct Badge
 {
     QString text;
     QColor color;
+    QString icon; // optional, before the text
 };
+
+qreal badgeWidth(const QFont &font, const Badge &badge)
+{
+    const QFontMetricsF metrics(font);
+    const qreal icon = badge.icon.isEmpty() ? 0 : metrics.height() + 2;
+    return metrics.horizontalAdvance(badge.text) + icon + 12;
+}
 
 qreal drawBadge(QPainter *painter, const QFont &font, const Badge &badge, qreal x, qreal centerY, bool darkBase)
 {
     const QFontMetricsF metrics(font);
-    const qreal width = metrics.horizontalAdvance(badge.text) + 12;
+    const qreal width = badgeWidth(font, badge);
     const qreal height = metrics.height() + 2;
     const QRectF rect(x, centerY - height / 2, width, height);
 
@@ -131,10 +140,19 @@ qreal drawBadge(QPainter *painter, const QFont &font, const Badge &badge, qreal 
     painter->setBrush(fill);
     painter->drawRoundedRect(rect, height / 2, height / 2);
 
-    QColor text = darkBase ? badge.color.lighter(150) : badge.color.darker(120);
+    const QColor text = darkBase ? badge.color.lighter(150) : badge.color.darker(120);
+    QRectF textRect = rect;
+    if (!badge.icon.isEmpty())
+    {
+        const qreal size = metrics.height() - 2;
+        const QRectF iconRect(rect.left() + 6, centerY - size / 2, size, size);
+        icons::get(badge.icon, text).paint(painter, iconRect.toAlignedRect());
+        textRect.setLeft(iconRect.right() + 2);
+        textRect.setRight(rect.right() - 6);
+    }
     painter->setPen(text);
     painter->setFont(font);
-    painter->drawText(rect, Qt::AlignCenter, badge.text);
+    painter->drawText(textRect, Qt::AlignCenter, badge.text);
     return width;
 }
 } // namespace
@@ -319,7 +337,7 @@ void AchievementDelegate::paintSection(QPainter *painter,
     qreal badgesWidth = 0;
     for (const auto &badge : badges)
     {
-        badgesWidth += QFontMetricsF(badgeFont).horizontalAdvance(badge.text) + 12 + 6;
+        badgesWidth += badgeWidth(badgeFont, badge) + 6;
     }
 
     const qreal textLeft = rect.left() + kCheckAreaWidth;
@@ -477,12 +495,12 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     }
     if (hidden)
     {
-        badges.append({tr("hidden"), palette.color(QPalette::Text)});
+        badges.append({tr("hidden"), kPurple, QStringLiteral("hidden")});
     }
     qreal badgesWidth = 0;
     for (const auto &badge : badges)
     {
-        badgesWidth += QFontMetricsF(badgeFont).horizontalAdvance(badge.text) + 12 + 6;
+        badgesWidth += badgeWidth(badgeFont, badge) + 6;
     }
 
     const QString name = index.data(Qt::DisplayRole).toString();

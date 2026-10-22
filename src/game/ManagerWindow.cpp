@@ -254,6 +254,7 @@ QWidget *ManagerWindow::createHeader()
     titleFont.setPointSizeF(titleFont.pointSizeF() * 1.45);
     titleFont.setBold(true);
     m_titleLabel->setFont(titleFont);
+    m_titleLabel->setTextFormat(Qt::PlainText); // a name from Steam, never markup
     m_titleLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_titleLabel->setText(m_gameName.isEmpty() ? QStringLiteral("App %1").arg(m_appId) : m_gameName);
     info->addWidget(m_titleLabel);

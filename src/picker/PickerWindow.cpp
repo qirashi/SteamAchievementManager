@@ -439,6 +439,22 @@ void PickerWindow::downloadList()
     request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
     request.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);
     request.setTransferTimeout(90000);
+    // The list is 1.7 MB and changes about once a day: download it only when
+    // it differs from the copy on disk (loaded by now; m_seen is what it had).
+    if (!m_seen.isEmpty())
+    {
+        const QByteArray etag = settings().value(QStringLiteral("picker/gameListETag")).toString().toLatin1();
+        const QByteArray modified =
+            settings().value(QStringLiteral("picker/gameListLastModified")).toString().toLatin1();
+        if (!etag.isEmpty())
+        {
+            request.setRawHeader("If-None-Match", etag);
+        }
+        if (!modified.isEmpty())
+        {
+            request.setRawHeader("If-Modified-Since", modified);
+        }
+    }
     m_listReply = network()->get(request);
     connect(m_listReply, &QNetworkReply::finished, this, &PickerWindow::onListDownloaded);
 }
@@ -458,7 +474,11 @@ void PickerWindow::onListDownloaded()
         return;
     }
 
-    if (reply->error() == QNetworkReply::NoError)
+    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 304)
+    {
+        // Not modified: the cached list, already loaded, is current.
+    }
+    else if (reply->error() == QNetworkReply::NoError)
     {
         const QByteArray body = reply->readAll();
         const auto entries = parseList(body);
@@ -469,7 +489,13 @@ void PickerWindow::onListDownloaded()
             if (file.open(QIODevice::WriteOnly))
             {
                 file.write(body);
-                file.commit();
+                if (file.commit())
+                {
+                    settings().setValue(QStringLiteral("picker/gameListETag"),
+                                        QString::fromLatin1(reply->rawHeader("ETag")));
+                    settings().setValue(QStringLiteral("picker/gameListLastModified"),
+                                        QString::fromLatin1(reply->rawHeader("Last-Modified")));
+                }
             }
             enqueue(entries);
         }

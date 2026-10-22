@@ -55,7 +55,8 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     {
         case Qt::DisplayRole:
         case Qt::EditRole: return game.name;
-        case Qt::ToolTipRole: return QStringLiteral("%1\nApp ID: %2").arg(game.name).arg(game.id);
+        case Qt::ToolTipRole:
+            return QStringLiteral("<b>%1</b><br>App ID: %2").arg(game.name.toHtmlEscaped()).arg(game.id);
         case IdRole: return game.id;
         case TypeRole: return game.type;
         case ImageRole: return m_images->image(imageUrl(index.row()));
