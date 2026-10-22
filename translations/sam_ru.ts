@@ -137,6 +137,14 @@
         <translation>защищено</translation>
     </message>
     <message>
+        <source>stat stays behind</source>
+        <translation>показатель отстанет</translation>
+    </message>
+    <message>
+        <source>Steam will unlock it</source>
+        <translation>Steam выдаст сам</translation>
+    </message>
+    <message>
         <source>hidden</source>
         <translation>скрытое</translation>
     </message>
@@ -150,6 +158,14 @@
     <message>
         <source>Progress: %1 of %2 (stat %3)</source>
         <translation>Прогресс: %1 из %2 (показатель %3)</translation>
+    </message>
+    <message>
+        <source>Unlocking it leaves the stat where it is. To raise the stat too, turn on "Raise the linked stat" in the ☰ menu of the game list.</source>
+        <translation>Получение достижения не меняет показатель. Чтобы поднимать и его, включите «Поднимать связанный показатель» в меню ☰ списка игр.</translation>
+    </message>
+    <message>
+        <source>The stat has reached the value: Steam unlocks the achievement by itself when the changes are saved.</source>
+        <translation>Показатель достиг нужного значения: Steam сам выдаст достижение при сохранении изменений.</translation>
     </message>
     <message>
         <source>Protected: this achievement can't be changed with Steam Achievement Manager.</source>
@@ -668,6 +684,10 @@ Running since %1.</source>
     <message>
         <source>Show the game in &amp;Discord</source>
         <translation>Показывать игру в &amp;Discord</translation>
+    </message>
+    <message>
+        <source>&amp;Raise the linked stat when unlocking an achievement</source>
+        <translation>&amp;Поднимать связанный показатель при получении достижения</translation>
     </message>
     <message>
         <source>Tile size (Ctrl+mouse wheel)</source>

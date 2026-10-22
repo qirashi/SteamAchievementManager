@@ -311,6 +311,37 @@ int StatsModel::modifiedCount() const
     }));
 }
 
+bool StatsModel::canRaise(int row, double value) const
+{
+    if (row < 0 || row >= m_stats.size())
+    {
+        return false;
+    }
+    const Stat &stat = m_stats.at(row);
+    const StatDefinition &definition = stat.definition;
+    const double current = stat.isInteger() ? stat.intValue : stat.floatValue;
+    const double original = stat.isInteger() ? stat.intOriginal : stat.floatOriginal;
+    return definition.kind != StatDefinition::Kind::AverageRate && definition.permission == 0 &&
+           !definition.setByTrustedGameServer && value > current && value >= definition.minValue &&
+           value <= definition.maxValue && (definition.maxChange <= 0 || value - original <= definition.maxChange) &&
+           (!stat.isInteger() || value <= std::numeric_limits<int32_t>::max());
+}
+
+void StatsModel::raise(int row, double value)
+{
+    Stat &stat = m_stats[row];
+    if (stat.isInteger())
+    {
+        stat.intValue = static_cast<int32_t>(std::ceil(value));
+    }
+    else
+    {
+        stat.floatValue = static_cast<float>(value);
+    }
+    emit dataChanged(index(row, 0), index(row, ColumnCount - 1));
+    emit changesUpdated();
+}
+
 void StatsModel::revert(int row)
 {
     if (row < 0 || row >= m_stats.size())

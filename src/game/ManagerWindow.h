@@ -87,6 +87,11 @@ private:
     void applyLanguage();
     bool isGroupingEnabled() const;
     bool isDiscordPresenceEnabled() const;
+    bool isRaiseLinkedStatsEnabled() const;
+    // With the setting on, the stat an achievement is unlocked by goes up to
+    // the unlocking value when the achievement is to be unlocked, and back when
+    // it no longer is.
+    void syncLinkedStats();
     void applyGroups();
     void restoreSectionExpansion();
 
@@ -125,6 +130,8 @@ private:
     std::optional<QList<AchievementGroup>> m_groups; // set once downloaded
     bool m_groupsRequested = false;
     bool m_groupingApplied = false;
+    // Stats raised by syncLinkedStats(), by ID, with the value they were set to.
+    QHash<QString, double> m_raisedStats;
     QFileSystemWatcher m_settingsWatcher;
     QSet<QString> m_collapsedSections;
     bool m_busy = false;

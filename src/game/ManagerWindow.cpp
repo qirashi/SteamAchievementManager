@@ -32,6 +32,7 @@
 #include "Icons.h"
 #include "ImageCache.h"
 #include "Languages.h"
+#include "LinkedStats.h"
 #include "PlayTimes.h"
 #include "StatsModel.h"
 #include "TitleBar.h"
@@ -196,6 +197,7 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
     });
     // Achievements unlocked by stats show how far the stat is, edits included.
     connect(m_stats, &StatsModel::changesUpdated, this, &ManagerWindow::updateStatValues);
+    connect(m_achievements, &AchievementModel::changesUpdated, this, &ManagerWindow::syncLinkedStats);
     connect(m_discord, &DiscordPresence::statusChanged, this, [this](const QString &message, bool warning) {
         // Success stays visible next to the other permanent status bar items.
         m_discordLabel->setVisible(!warning);
@@ -231,6 +233,7 @@ void ManagerWindow::onSettingsChanged(const QString &path)
     {
         applyGroups();
     }
+    syncLinkedStats();
     const bool discord = isDiscordPresenceEnabled();
     m_discord->setEnabled(discord);
     if (!discord)
@@ -749,6 +752,7 @@ void ManagerWindow::onUserStatsReceived(const steam::UserStatsReceived &message)
 
     applyLanguage();
     loadAchievements();
+    m_raisedStats.clear();
     loadStatistics();
     updateStatValues();
     setBusy(false);
@@ -865,6 +869,16 @@ void ManagerWindow::applyLanguage()
 bool ManagerWindow::isGroupingEnabled() const
 {
     return settings().value(QStringLiteral("game/groupAchievements"), true).toBool();
+}
+
+bool ManagerWindow::isRaiseLinkedStatsEnabled() const
+{
+    return settings().value(QStringLiteral("game/raiseLinkedStats"), false).toBool();
+}
+
+void ManagerWindow::syncLinkedStats()
+{
+    sam::syncLinkedStats(m_achievements->achievements(), *m_stats, m_raisedStats, isRaiseLinkedStatsEnabled());
 }
 
 bool ManagerWindow::isDiscordPresenceEnabled() const

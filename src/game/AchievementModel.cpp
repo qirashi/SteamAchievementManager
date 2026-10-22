@@ -236,6 +236,19 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
                         .arg(QLocale().toString(*it, 'g', 10),
                              QLocale().toString(achievement.definition.progressMax, 'g', 10),
                              achievement.definition.progressStat.toHtmlEscaped()));
+                const bool reached = *it >= achievement.definition.progressMax;
+                if (!achievement.achieved && achievement.checked && !reached)
+                {
+                    tip += QStringLiteral("<br><small>%1</small>")
+                               .arg(tr("Unlocking it leaves the stat where it is. To raise the stat too, turn on "
+                                       "\"Raise the linked stat\" in the ☰ menu of the game list."));
+                }
+                else if (!achievement.achieved && !achievement.checked && reached)
+                {
+                    tip += QStringLiteral("<br><small>%1</small>")
+                               .arg(tr("The stat has reached the value: Steam unlocks the achievement by itself "
+                                       "when the changes are saved."));
+                }
             }
             tip += QStringLiteral("<br><small>ID: %1</small>").arg(achievement.definition.id.toHtmlEscaped());
             if (achievement.isProtected())

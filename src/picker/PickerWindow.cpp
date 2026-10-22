@@ -302,6 +302,8 @@ void PickerWindow::createToolBar()
     };
     addToggle(tr("&Group by DLC (steamhunters.com)"), QStringLiteral("game/groupAchievements"), true);
     addToggle(tr("Show the game in &Discord"), QStringLiteral("game/discordPresence"), false);
+    addToggle(
+        tr("&Raise the linked stat when unlocking an achievement"), QStringLiteral("game/raiseLinkedStats"), false);
     settingsMenu->insertSeparator(first);
     settingsButton->setMenu(settingsMenu);
     toolBar->addWidget(settingsButton);

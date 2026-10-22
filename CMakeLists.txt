@@ -94,6 +94,8 @@ qt_add_executable(SAM.Game WIN32
     src/game/AchievementGroups.h
     src/game/AchievementRarity.cpp
     src/game/AchievementRarity.h
+    src/game/LinkedStats.cpp
+    src/game/LinkedStats.h
     src/game/AchievementModel.cpp
     src/game/AchievementModel.h
     src/game/DiscordPresence.cpp

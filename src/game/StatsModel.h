@@ -82,6 +82,15 @@ public:
     int modifiedCount() const;
     void revert(int row);
 
+    // Whether the stat in `row` may be raised to `value` by the program: a
+    // plain integer or float stat with no permission flags (protected, set by a
+    // game server), `value` above the current one, within the stat's range and
+    // its largest change per store.
+    bool canRaise(int row, double value) const;
+    // Sets the value without the "I understand" check of the statistics page;
+    // only after canRaise().
+    void raise(int row, double value);
+
 signals:
     void changesUpdated();
     void editRejected(const QString &message);

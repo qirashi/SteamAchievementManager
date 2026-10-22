@@ -572,7 +572,9 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     // Progress towards the achievement on the right, while it's locked.
     int textRight = rect.right() - kPadding;
     const QVariant progressValue = index.data(AchievementModel::ProgressValueRole);
-    if (progressValue.isValid() && !checked)
+    const bool achieved = index.data(AchievementModel::AchievedRole).toBool();
+    const double progressMax = index.data(AchievementModel::ProgressMaxRole).toDouble();
+    if (progressValue.isValid() && !achieved)
     {
         textRight = paintProgress(painter,
                                   option,
@@ -610,6 +612,20 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     if (isProtected)
     {
         badges.append({tr("protected"), kRed});
+    }
+    // Achievements unlocked by a stat: Steam unlocks them itself when the stat
+    // gets there, but unlocking one leaves the stat as it is.
+    if (progressValue.isValid() && !achieved)
+    {
+        const bool reached = progressValue.toDouble() >= progressMax;
+        if (checked && !reached)
+        {
+            badges.append({tr("stat stays behind"), kOrange, QStringLiteral("warning")});
+        }
+        else if (!checked && reached)
+        {
+            badges.append({tr("Steam will unlock it"), kBlue, QStringLiteral("check")});
+        }
     }
     if (hidden)
     {
