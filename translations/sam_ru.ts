@@ -199,6 +199,12 @@
         <translation>«%1» защищено и не может быть изменено в Steam Achievement Manager.</translation>
     </message>
     <message>
+        <source>Steam shows the game as running while this window is open and counts its playtime.
+Running since %1.</source>
+        <translation>Пока это окно открыто, Steam считает игру запущенной и засчитывает время в ней.
+Запущена в %1.</translation>
+    </message>
+    <message>
         <source>Search achievements…</source>
         <translation>Поиск достижений…</translation>
     </message>
@@ -453,6 +459,10 @@
     <message>
         <source>&amp;Revert value</source>
         <translation>&amp;Вернуть исходное значение</translation>
+    </message>
+    <message>
+        <source>In game %1</source>
+        <translation>В игре %1</translation>
     </message>
     <message>
         <source>Loading…</source>

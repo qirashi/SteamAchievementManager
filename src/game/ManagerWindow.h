@@ -28,6 +28,8 @@
 #include "Schema.h"
 #include "SteamClient.h"
 
+#include <QDateTime>
+#include <QElapsedTimer>
 #include <QFileSystemWatcher>
 #include <QMainWindow>
 #include <QSet>
@@ -105,6 +107,7 @@ private:
 
     void setBusy(bool busy, const QString &message = {});
     void updateSummary();
+    void updatePlayTime();
     void updateHeaderImage();
     void updateDownloadStatus(int pending);
     void showStatusMessage(const QString &message, bool warning = false);
@@ -132,6 +135,7 @@ private:
     QLabel *m_headerImage = nullptr;
     QLabel *m_titleLabel = nullptr;
     QLabel *m_summaryLabel = nullptr;
+    QLabel *m_playTimeLabel = nullptr;
     QProgressBar *m_summaryProgress = nullptr;
 
     // Actions (buttons on the pages)
@@ -154,5 +158,9 @@ private:
     QProgressBar *m_busyIndicator = nullptr;
 
     QTimer m_callbackTimer;
+    // Steam counts the game as running from the start of SAM.Game on.
+    QElapsedTimer m_playTime;
+    QDateTime m_playStart;
+    QTimer m_playTimeTimer;
 };
 } // namespace sam

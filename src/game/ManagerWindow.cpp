@@ -46,6 +46,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
@@ -283,7 +284,35 @@ QWidget *ManagerWindow::createHeader()
         QDesktopServices::openUrl(
             QUrl(QStringLiteral("https://steamcommunity.com/stats/%1/achievements").arg(m_appId)));
     });
-    layout->addWidget(pageButton, 0, Qt::AlignTop | Qt::AlignRight);
+
+    // While this window is open, Steam shows the game as running and counts
+    // its playtime: the timer says for how long.
+    auto *playTime = new QWidget(header);
+    auto *playTimeLayout = new QHBoxLayout(playTime);
+    playTimeLayout->setContentsMargins(0, 0, 0, 0);
+    playTimeLayout->setSpacing(5);
+    auto *playIcon = new QLabel(playTime);
+    playIcon->setPixmap(icons::get(QStringLiteral("play"), QColor(0x2e, 0xa0, 0x43)).pixmap(14, 14));
+    playTimeLayout->addWidget(playIcon);
+    m_playTimeLabel = new QLabel(playTime);
+    m_playTimeLabel->setForegroundRole(QPalette::PlaceholderText);
+    playTimeLayout->addWidget(m_playTimeLabel);
+
+    auto *side = new QVBoxLayout;
+    side->setSpacing(4);
+    side->addWidget(pageButton, 0, Qt::AlignRight);
+    side->addStretch();
+    side->addWidget(playTime, 0, Qt::AlignRight);
+    layout->addLayout(side);
+
+    m_playTime.start();
+    m_playStart = QDateTime::currentDateTime();
+    playTime->setToolTip(tr("Steam shows the game as running while this window is open and counts its playtime.\n"
+                            "Running since %1.")
+                             .arg(QLocale().toString(m_playStart.time(), QLocale::ShortFormat)));
+    connect(&m_playTimeTimer, &QTimer::timeout, this, &ManagerWindow::updatePlayTime);
+    m_playTimeTimer.start(1000);
+    updatePlayTime();
 
     return header;
 }
@@ -1186,6 +1215,16 @@ void ManagerWindow::setBusy(bool busy, const QString &message)
         showStatusMessage(message);
     }
     updateSummary();
+}
+
+void ManagerWindow::updatePlayTime()
+{
+    const qint64 seconds = m_playTime.elapsed() / 1000;
+    const QString time = QStringLiteral("%1:%2:%3")
+                             .arg(seconds / 3600)
+                             .arg(seconds / 60 % 60, 2, 10, QLatin1Char('0'))
+                             .arg(seconds % 60, 2, 10, QLatin1Char('0'));
+    m_playTimeLabel->setText(tr("In game %1").arg(time));
 }
 
 void ManagerWindow::updateSummary()
