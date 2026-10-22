@@ -51,6 +51,7 @@ namespace sam
 {
 class AchievementFilterModel;
 class AchievementModel;
+class DiscordPresence;
 class ImageCache;
 class StatsModel;
 
@@ -120,6 +121,7 @@ private:
     AchievementModel *m_achievements;
     AchievementFilterModel *m_achievementFilter;
     StatsModel *m_stats;
+    DiscordPresence *m_discord;
 
     // Header
     QLabel *m_headerImage = nullptr;
@@ -133,6 +135,7 @@ private:
     QAction *m_resetAction = nullptr;
     QMenu *m_languageMenu = nullptr;
     QAction *m_groupAction = nullptr;
+    QAction *m_discordAction = nullptr;
 
     // Pages
     QTabWidget *m_tabs = nullptr;
@@ -145,6 +148,7 @@ private:
     // Status bar
     QLabel *m_statusLabel = nullptr;
     QLabel *m_downloadLabel = nullptr;
+    QLabel *m_discordLabel = nullptr;
     QProgressBar *m_busyIndicator = nullptr;
 
     QTimer m_callbackTimer;

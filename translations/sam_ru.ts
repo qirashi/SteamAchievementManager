@@ -130,6 +130,41 @@
     </message>
 </context>
 <context>
+    <name>sam::DiscordPresence</name>
+    <message>
+        <source>Couldn't download Discord's game list: %1</source>
+        <translation>Не удалось загрузить список игр Discord: %1</translation>
+    </message>
+    <message>
+        <source>Couldn't read Discord's game list.</source>
+        <translation>Не удалось прочитать список игр Discord.</translation>
+    </message>
+    <message>
+        <source>Discord doesn't detect this game, so it can't be shown there.</source>
+        <translation>Discord не знает эту игру, поэтому показать её там нельзя.</translation>
+    </message>
+    <message>
+        <source>SAM.Stub.exe is missing next to SAM.Game.exe.</source>
+        <translation>Рядом с SAM.Game.exe нет файла SAM.Stub.exe.</translation>
+    </message>
+    <message>
+        <source>Couldn't create %1.</source>
+        <translation>Не удалось создать %1.</translation>
+    </message>
+    <message>
+        <source>Discord no longer sees this game: its window was closed.</source>
+        <translation>Discord больше не видит игру: её окно закрыто.</translation>
+    </message>
+    <message>
+        <source>Couldn't start the process for Discord: %1</source>
+        <translation>Не удалось запустить процесс для Discord: %1</translation>
+    </message>
+    <message>
+        <source>Discord sees this game as running (%1).</source>
+        <translation>Discord видит игру запущенной (%1).</translation>
+    </message>
+</context>
+<context>
     <name>sam::ManagerWindow</name>
     <message>
         <source>generic error — this usually means you don't own the game</source>
@@ -258,6 +293,14 @@
     <message>
         <source>&amp;Group by DLC (steamhunters.com)</source>
         <translation>&amp;Группировать по DLC (steamhunters.com)</translation>
+    </message>
+    <message>
+        <source>Show the game in &amp;Discord</source>
+        <translation>Показывать игру в &amp;Discord</translation>
+    </message>
+    <message>
+        <source>Discord: playing</source>
+        <translation>Discord: в игре</translation>
     </message>
     <message>
         <source>Unsaved changes</source>

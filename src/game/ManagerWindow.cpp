@@ -27,6 +27,7 @@
 #include "AchievementDelegate.h"
 #include "AchievementModel.h"
 #include "Application.h"
+#include "DiscordPresence.h"
 #include "Icons.h"
 #include "ImageCache.h"
 #include "Languages.h"
@@ -117,6 +118,7 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
     , m_achievements(new AchievementModel(appId, m_images, this))
     , m_achievementFilter(new AchievementFilterModel(this))
     , m_stats(new StatsModel(this))
+    , m_discord(new DiscordPresence(appId, this))
 {
     m_gameName = m_client.appData(m_appId, "name");
     setWindowTitle(m_gameName.isEmpty() ? QStringLiteral("App %1").arg(m_appId) : m_gameName);
@@ -171,6 +173,17 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
     updateHeaderImage();
     updateSummary();
     applyGroups(); // downloads in parallel with the stats request
+    connect(m_discord, &DiscordPresence::statusChanged, this, [this](const QString &message, bool warning) {
+        // Success stays visible next to the other permanent status bar items.
+        m_discordLabel->setVisible(!warning);
+        m_discordLabel->setToolTip(message);
+        if (warning)
+        {
+            showStatusMessage(message, true);
+        }
+    });
+    m_discord->setTitle(m_gameName);
+    m_discord->setEnabled(m_discordAction->isChecked());
     QTimer::singleShot(0, this, &ManagerWindow::refreshStats);
 }
 
@@ -488,6 +501,18 @@ void ManagerWindow::createToolBar()
         applyGroups();
     });
     settingsMenu->insertAction(first, m_groupAction);
+    m_discordAction = new QAction(icons::get(QStringLiteral("play")), tr("Show the game in &Discord"), settingsMenu);
+    m_discordAction->setCheckable(true);
+    m_discordAction->setChecked(settings().value(QStringLiteral("game/discordPresence"), false).toBool());
+    connect(m_discordAction, &QAction::toggled, this, [this](bool checked) {
+        settings().setValue(QStringLiteral("game/discordPresence"), checked);
+        m_discord->setEnabled(checked);
+        if (!checked)
+        {
+            m_discordLabel->hide();
+        }
+    });
+    settingsMenu->insertAction(first, m_discordAction);
     settingsMenu->insertSeparator(first);
     settingsButton->setMenu(settingsMenu);
     toolBar->addWidget(settingsButton);
@@ -511,6 +536,10 @@ void ManagerWindow::createStatusBar()
     m_downloadLabel = new QLabel(bar);
     m_downloadLabel->hide();
     bar->addPermanentWidget(m_downloadLabel);
+
+    m_discordLabel = new QLabel(tr("Discord: playing"), bar);
+    m_discordLabel->hide();
+    bar->addPermanentWidget(m_discordLabel);
 }
 
 void ManagerWindow::restoreSettings()

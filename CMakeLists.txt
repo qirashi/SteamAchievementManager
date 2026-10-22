@@ -81,6 +81,8 @@ qt_add_executable(SAM.Game WIN32
     src/game/AchievementGroups.h
     src/game/AchievementModel.cpp
     src/game/AchievementModel.h
+    src/game/DiscordPresence.cpp
+    src/game/DiscordPresence.h
     src/game/ManagerWindow.cpp
     src/game/ManagerWindow.h
     src/game/Schema.cpp
@@ -91,6 +93,21 @@ qt_add_executable(SAM.Game WIN32
     resources/SAM.rc
 )
 target_link_libraries(SAM.Game PRIVATE sam_core)
+add_dependencies(SAM.Game SAM.Stub)
+
+# ---------------------------------------------------------------------------
+# SAM.Stub: an empty process SAM.Game runs under a game's executable name so
+# Discord shows the game being played. Plain Win32 with a static CRT, since
+# copies of it run from other folders.
+# ---------------------------------------------------------------------------
+add_executable(SAM.Stub WIN32 src/stub/main.cpp)
+set_target_properties(SAM.Stub PROPERTIES
+    AUTOMOC OFF
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+target_compile_definitions(SAM.Stub PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+if(MSVC)
+    target_compile_options(SAM.Stub PRIVATE /W4 /permissive-)
+endif()
 
 # ---------------------------------------------------------------------------
 # Translations (embedded into both executables under :/i18n).
@@ -115,7 +132,7 @@ endforeach()
 # Install + deploy Qt runtime next to the executables:
 #   cmake --install <build-dir>
 # ---------------------------------------------------------------------------
-install(TARGETS SAM.Picker SAM.Game RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS SAM.Picker SAM.Game SAM.Stub RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 foreach(target IN ITEMS SAM.Picker SAM.Game)
     qt_generate_deploy_app_script(
         TARGET ${target}
