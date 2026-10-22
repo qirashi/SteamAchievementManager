@@ -26,6 +26,7 @@
 
 #include "ImageCache.h"
 
+#include <QCollator>
 #include <QLocale>
 
 #include <algorithm>
@@ -199,6 +200,11 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
             {
                 return displayName(achievement);
             }
+            if (index.column() == RarityColumn)
+            {
+                const auto it = m_rarity.constFind(achievement.definition.id);
+                return it != m_rarity.cend() ? QStringLiteral("%1 %").arg(QLocale().toString(*it, 'f', 1)) : QVariant();
+            }
             if (index.column() == UnlockTimeColumn && achievement.achieved && achievement.unlockTime.isValid())
             {
                 return QLocale().toString(achievement.unlockTime, QLocale::ShortFormat);
@@ -217,6 +223,20 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
             {
                 tip += QStringLiteral("<br>%1").arg(text.toHtmlEscaped());
             }
+            if (const auto it = m_rarity.constFind(achievement.definition.id); it != m_rarity.cend())
+            {
+                tip += QStringLiteral("<br>%1").arg(
+                    tr("%1 % of players have this achievement.").arg(QLocale().toString(*it, 'f', 1)));
+            }
+            if (const auto it = m_statValues.constFind(achievement.definition.progressStat);
+                !achievement.definition.progressStat.isEmpty() && it != m_statValues.cend())
+            {
+                tip += QStringLiteral("<br>%1").arg(
+                    tr("Progress: %1 of %2 (stat %3)")
+                        .arg(QLocale().toString(*it, 'g', 10),
+                             QLocale().toString(achievement.definition.progressMax, 'g', 10),
+                             achievement.definition.progressStat.toHtmlEscaped()));
+            }
             tip += QStringLiteral("<br><small>ID: %1</small>").arg(achievement.definition.id.toHtmlEscaped());
             if (achievement.isProtected())
             {
@@ -230,6 +250,10 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
             {
                 return QVariant::fromValue(Qt::AlignLeft | Qt::AlignVCenter);
             }
+            if (index.column() == RarityColumn)
+            {
+                return QVariant::fromValue(Qt::AlignRight | Qt::AlignVCenter);
+            }
             return {};
         case IdRole: return achievement.definition.id;
         case DescriptionRole: return description(achievement);
@@ -238,6 +262,18 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
         case ProtectedRole: return achievement.isProtected();
         case HiddenRole: return achievement.definition.isHidden;
         case ModifiedRole: return achievement.isModified();
+        case RarityRole:
+            return m_rarity.value(achievement.definition.id, -1.0) >= 0
+                       ? QVariant(m_rarity.value(achievement.definition.id))
+                       : QVariant();
+        case UnlockTimeRole: return achievement.achieved ? achievement.unlockTime : QDateTime();
+        case ProgressValueRole: {
+            const QString &stat = achievement.definition.progressStat;
+            const auto it = m_statValues.constFind(stat);
+            return stat.isEmpty() || it == m_statValues.cend() ? QVariant() : QVariant(*it);
+        }
+        case ProgressMaxRole: return achievement.definition.progressMax;
+        case ProgressStatRole: return achievement.definition.progressStat;
         case SectionRole: return false;
         default: return {};
     }
@@ -245,6 +281,10 @@ QVariant AchievementModel::data(const QModelIndex &index, int role) const
 
 QVariant AchievementModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
+    if (orientation == Qt::Horizontal && role == Qt::ToolTipRole && section == RarityColumn)
+    {
+        return tr("Share of Steam players who have the achievement. Click a column to sort by it.");
+    }
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
     {
         return {};
@@ -252,6 +292,7 @@ QVariant AchievementModel::headerData(int section, Qt::Orientation orientation, 
     switch (section)
     {
         case NameColumn: return tr("Achievement");
+        case RarityColumn: return tr("Rarity");
         case UnlockTimeColumn: return tr("Unlocked on");
         default: return {};
     }
@@ -381,6 +422,18 @@ void AchievementModel::setLanguage(const QString &language)
     }
     m_language = language;
     // Section names don't depend on the achievement language.
+    emitAllChanged();
+}
+
+void AchievementModel::setRarity(QHash<QString, double> rarity)
+{
+    m_rarity = std::move(rarity);
+    emitAllChanged();
+}
+
+void AchievementModel::setStatValues(QHash<QString, double> values)
+{
+    m_statValues = std::move(values);
     emitAllChanged();
 }
 
@@ -551,5 +604,56 @@ bool AchievementFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &
     return index.data(Qt::DisplayRole).toString().contains(m_search, Qt::CaseInsensitive) ||
            index.data(AchievementModel::DescriptionRole).toString().contains(m_search, Qt::CaseInsensitive) ||
            index.data(AchievementModel::IdRole).toString().contains(m_search, Qt::CaseInsensitive);
+}
+bool AchievementFilterModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
+{
+    // The view reverses the result for a descending sort; sections undo that.
+    if (left.data(AchievementModel::SectionRole).toBool())
+    {
+        return (left.row() < right.row()) == (sortOrder() == Qt::AscendingOrder);
+    }
+
+    switch (left.column())
+    {
+        case AchievementModel::NameColumn: {
+            static const QCollator collator = [] {
+                QCollator result;
+                result.setCaseSensitivity(Qt::CaseInsensitive);
+                result.setNumericMode(true);
+                return result;
+            }();
+            const int order =
+                collator.compare(left.data(Qt::DisplayRole).toString(), right.data(Qt::DisplayRole).toString());
+            if (order != 0)
+            {
+                return order < 0;
+            }
+            break;
+        }
+        case AchievementModel::RarityColumn: {
+            // Achievements without data go after the others.
+            const QVariant a = left.data(AchievementModel::RarityRole);
+            const QVariant b = right.data(AchievementModel::RarityRole);
+            const double x = a.isValid() ? a.toDouble() : 1000.0;
+            const double y = b.isValid() ? b.toDouble() : 1000.0;
+            if (x != y)
+            {
+                return x < y;
+            }
+            break;
+        }
+        case AchievementModel::UnlockTimeColumn: {
+            const QDateTime a = left.data(AchievementModel::UnlockTimeRole).toDateTime();
+            const QDateTime b = right.data(AchievementModel::UnlockTimeRole).toDateTime();
+            if (a != b)
+            {
+                // Locked achievements (no time) go after the unlocked ones.
+                return a.isValid() && (!b.isValid() || a < b);
+            }
+            break;
+        }
+        default: break;
+    }
+    return left.row() < right.row();
 }
 } // namespace sam

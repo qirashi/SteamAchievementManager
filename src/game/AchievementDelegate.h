@@ -51,6 +51,14 @@ private:
     // The card of the row, with the hover or selection block over it.
     void paintBackground(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
     void paintSection(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    void paintRarity(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    // "value / maximum" and a bar at the right of `rect`; returns where they begin.
+    int paintProgress(QPainter *painter,
+                      const QStyleOptionViewItem &option,
+                      const QRect &rect,
+                      double value,
+                      double maximum,
+                      bool selected) const;
 
     bool m_skipNextRelease = false;
 };

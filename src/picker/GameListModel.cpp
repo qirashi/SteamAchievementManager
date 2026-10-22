@@ -25,8 +25,11 @@
 #include "GameListModel.h"
 
 #include "ImageCache.h"
+#include "PlayTimes.h"
 
 #include <QCollator>
+#include <QDateTime>
+#include <QLocale>
 
 namespace sam
 {
@@ -55,10 +58,30 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     {
         case Qt::DisplayRole:
         case Qt::EditRole: return game.name;
-        case Qt::ToolTipRole:
-            return QStringLiteral("<b>%1</b><br>App ID: %2").arg(game.name.toHtmlEscaped()).arg(game.id);
+        case Qt::ToolTipRole: {
+            QString tip = QStringLiteral("<b>%1</b><br>App ID: %2").arg(game.name.toHtmlEscaped()).arg(game.id);
+            if (game.playtime > 0)
+            {
+                tip += QStringLiteral("<br>") + tr("Played: %1").arg(formatPlaytime(game.playtime));
+            }
+            if (game.lastPlayed > 0)
+            {
+                tip +=
+                    QStringLiteral("<br>") +
+                    tr("Last played: %1")
+                        .arg(QLocale().toString(QDateTime::fromSecsSinceEpoch(game.lastPlayed), QLocale::ShortFormat));
+            }
+            if (!game.hasAchievements)
+            {
+                tip += QStringLiteral("<br>") + tr("No Steam achievements");
+            }
+            return tip;
+        }
         case IdRole: return game.id;
         case TypeRole: return game.type;
+        case PlaytimeRole: return game.playtime;
+        case LastPlayedRole: return game.lastPlayed;
+        case HasAchievementsRole: return game.hasAchievements;
         case ImageRole: return m_images->image(imageUrl(index.row()));
         case ImageFailedRole: {
             const QString url = imageUrl(index.row());
@@ -104,6 +127,18 @@ void GameListModel::setName(uint32_t id, const QString &name)
     m_games[*it].name = name;
     const QModelIndex changed = index(*it);
     emit dataChanged(changed, changed, {Qt::DisplayRole, Qt::EditRole, Qt::ToolTipRole});
+}
+
+void GameListModel::setHasAchievements(uint32_t id, bool hasAchievements)
+{
+    const auto it = m_rows.constFind(id);
+    if (it == m_rows.cend() || m_games.at(*it).hasAchievements == hasAchievements)
+    {
+        return;
+    }
+    m_games[*it].hasAchievements = hasAchievements;
+    const QModelIndex changed = index(*it);
+    emit dataChanged(changed, changed, {HasAchievementsRole, Qt::ToolTipRole});
 }
 
 QModelIndex GameListModel::indexOf(uint32_t id) const
@@ -205,6 +240,10 @@ bool GameFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceP
     {
         return false;
     }
+    if (!m_showWithoutAchievements && !index.data(GameListModel::HasAchievementsRole).toBool())
+    {
+        return false;
+    }
 
     if (m_search.isEmpty())
     {
@@ -222,8 +261,43 @@ bool GameFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceP
     return isNumber && index.data(GameListModel::IdRole).toUInt() == id;
 }
 
+void GameFilterModel::setSortMode(SortMode mode)
+{
+    if (mode == m_sortMode)
+    {
+        return;
+    }
+    m_sortMode = mode;
+    invalidate();
+}
+
+void GameFilterModel::setShowWithoutAchievements(bool show)
+{
+    if (show == m_showWithoutAchievements)
+    {
+        return;
+    }
+    beginFilterChange();
+    m_showWithoutAchievements = show;
+    endFilterChange(Direction::Rows);
+}
+
 bool GameFilterModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
+    // Ties (and the games never played) fall back to the name.
+    const int role = m_sortMode == SortMode::LastPlayed ? GameListModel::LastPlayedRole
+                     : m_sortMode == SortMode::Playtime ? GameListModel::PlaytimeRole
+                                                        : -1;
+    if (role >= 0)
+    {
+        const qint64 a = left.data(role).toLongLong();
+        const qint64 b = right.data(role).toLongLong();
+        if (a != b)
+        {
+            return a > b;
+        }
+    }
+
     static const QCollator collator = [] {
         QCollator result;
         result.setCaseSensitivity(Qt::CaseInsensitive);

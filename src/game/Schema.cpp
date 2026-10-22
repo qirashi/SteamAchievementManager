@@ -249,6 +249,21 @@ std::optional<Schema> Schema::load(uint32_t appId)
                         definition.iconLocked = display["icon_gray"].asString();
                         definition.isHidden = display["hidden"].asBoolean(false);
                         definition.permission = bit["permission"].asInteger(0);
+                        // "progress": {"min_val", "max_val", "value": {"operation": "statvalue",
+                        // "operand1": <stat>}}; other operations aren't a single stat.
+                        const KeyValue &progress = bit["progress"];
+                        const KeyValue &value = progress["value"];
+                        if (progress.valid && value["operation"].asString().compare(QLatin1StringView("statvalue"),
+                                                                                    Qt::CaseInsensitive) == 0)
+                        {
+                            definition.progressStat = value["operand1"].asString();
+                            definition.progressMin = progress["min_val"].asFloat(0.0f);
+                            definition.progressMax = progress["max_val"].asFloat(0.0f);
+                            if (definition.progressMax <= definition.progressMin)
+                            {
+                                definition.progressStat.clear();
+                            }
+                        }
                         addLanguages(schema.languages, definition.name);
                         addLanguages(schema.languages, definition.description);
                         schema.achievements.append(std::move(definition));

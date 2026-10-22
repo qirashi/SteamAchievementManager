@@ -104,6 +104,21 @@
     </message>
 </context>
 <context>
+    <name>PlayTime</name>
+    <message>
+        <source>%1 min</source>
+        <translation>%1 мин</translation>
+    </message>
+    <message>
+        <source>%1 h</source>
+        <translation>%1 ч</translation>
+    </message>
+    <message>
+        <source>%1 h %2 min</source>
+        <translation>%1 ч %2 мин</translation>
+    </message>
+</context>
+<context>
     <name>sam::AchievementDelegate</name>
     <message>
         <source>changed</source>
@@ -129,12 +144,28 @@
 <context>
     <name>sam::AchievementModel</name>
     <message>
+        <source>%1 % of players have this achievement.</source>
+        <translation>Это достижение есть у %1 % игроков.</translation>
+    </message>
+    <message>
+        <source>Progress: %1 of %2 (stat %3)</source>
+        <translation>Прогресс: %1 из %2 (показатель %3)</translation>
+    </message>
+    <message>
         <source>Protected: this achievement can't be changed with Steam Achievement Manager.</source>
         <translation>Защищено: это достижение нельзя изменить в Steam Achievement Manager.</translation>
     </message>
     <message>
+        <source>Share of Steam players who have the achievement. Click a column to sort by it.</source>
+        <translation>Доля игроков Steam, у которых есть это достижение. Нажмите на заголовок колонки, чтобы отсортировать по ней.</translation>
+    </message>
+    <message>
         <source>Achievement</source>
         <translation>Достижение</translation>
+    </message>
+    <message>
+        <source>Rarity</source>
+        <translation>Редкость</translation>
     </message>
     <message>
         <source>Unlocked on</source>
@@ -178,6 +209,21 @@
     <message>
         <source>Discord sees this game as running (%1).</source>
         <translation>Discord видит игру запущенной (%1).</translation>
+    </message>
+</context>
+<context>
+    <name>sam::GameListModel</name>
+    <message>
+        <source>Played: %1</source>
+        <translation>В игре: %1</translation>
+    </message>
+    <message>
+        <source>Last played: %1</source>
+        <translation>Последний запуск: %1</translation>
+    </message>
+    <message>
+        <source>No Steam achievements</source>
+        <translation>Нет достижений Steam</translation>
     </message>
 </context>
 <context>
@@ -295,6 +341,18 @@ Running since %1.</source>
     <message>
         <source>Open the achievements page in the browser</source>
         <translation>Открыть страницу достижений в браузере</translation>
+    </message>
+    <message>
+        <source>Total playtime: %1</source>
+        <translation>Всего в игре: %1</translation>
+    </message>
+    <message>
+        <source>Steam's own count, as of when this window opened; it takes a while for Steam to add the current session.</source>
+        <translation>Счёт самого Steam на момент открытия окна; текущий запуск Steam добавит не сразу.</translation>
+    </message>
+    <message>
+        <source>Last played: %1</source>
+        <translation>Последний запуск: %1</translation>
     </message>
     <message>
         <source>Discord: playing</source>
@@ -425,6 +483,10 @@ Running since %1.</source>
         <translation>&amp;Отменить изменения</translation>
     </message>
     <message>
+        <source>Show the &amp;stat it's unlocked by</source>
+        <translation>Показать &amp;показатель, от которого оно зависит</translation>
+    </message>
+    <message>
         <source>Copy &amp;name</source>
         <translation>Копировать &amp;название</translation>
     </message>
@@ -544,10 +606,6 @@ Running since %1.</source>
         <translation>Фильтр списка по названию игры или App ID (Ctrl+F)</translation>
     </message>
     <message>
-        <source>Choose which kinds of apps are listed</source>
-        <translation>Выберите, какие типы приложений показывать</translation>
-    </message>
-    <message>
         <source>Refresh</source>
         <translation>Обновить</translation>
     </message>
@@ -562,6 +620,30 @@ Running since %1.</source>
     <message>
         <source>Add a game that isn't in the list by its App ID</source>
         <translation>Добавить игру, которой нет в списке, по её App ID</translation>
+    </message>
+    <message>
+        <source>Show games &amp;without achievements</source>
+        <translation>Показывать игры &amp;без достижений</translation>
+    </message>
+    <message>
+        <source>Sort</source>
+        <translation>Сортировка</translation>
+    </message>
+    <message>
+        <source>By &amp;name</source>
+        <translation>По &amp;названию</translation>
+    </message>
+    <message>
+        <source>&amp;Recently played</source>
+        <translation>&amp;Недавние</translation>
+    </message>
+    <message>
+        <source>By &amp;playtime</source>
+        <translation>По &amp;времени в игре</translation>
+    </message>
+    <message>
+        <source>Choose which apps are listed and how they're sorted</source>
+        <translation>Какие приложения показывать и как их сортировать</translation>
     </message>
     <message>
         <source>Add game</source>

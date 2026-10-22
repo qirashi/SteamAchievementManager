@@ -57,6 +57,10 @@ struct AchievementDefinition
     QString iconLocked;
     bool isHidden = false;
     int permission = 0;
+    // Achievements unlocked by a stat reaching a value: the stat and its range.
+    QString progressStat;
+    double progressMin = 0;
+    double progressMax = 0;
 };
 
 struct StatDefinition

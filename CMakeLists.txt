@@ -45,6 +45,8 @@ qt_add_library(sam_core STATIC
     src/core/ImageCache.h
     src/core/KeyValue.cpp
     src/core/KeyValue.h
+    src/core/PlayTimes.cpp
+    src/core/PlayTimes.h
     src/core/Languages.cpp
     src/core/Languages.h
     src/core/SteamClient.cpp
@@ -90,6 +92,8 @@ qt_add_executable(SAM.Game WIN32
     src/game/AchievementDelegate.h
     src/game/AchievementGroups.cpp
     src/game/AchievementGroups.h
+    src/game/AchievementRarity.cpp
+    src/game/AchievementRarity.h
     src/game/AchievementModel.cpp
     src/game/AchievementModel.h
     src/game/DiscordPresence.cpp

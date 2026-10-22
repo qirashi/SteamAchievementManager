@@ -68,6 +68,7 @@ public:
     enum Column
     {
         NameColumn,
+        RarityColumn,
         UnlockTimeColumn,
         ColumnCount,
     };
@@ -81,6 +82,11 @@ public:
         ProtectedRole,
         HiddenRole,
         ModifiedRole,
+        RarityRole,        // percent of players who have it (double), or invalid
+        UnlockTimeRole,    // QDateTime, invalid when locked
+        ProgressValueRole, // the value of the stat it's unlocked by (double), or invalid
+        ProgressMaxRole,   // the value of that stat that unlocks it
+        ProgressStatRole,  // the ID of that stat
         // Section rows only.
         SectionRole,
         SectionDlcRole,
@@ -103,6 +109,10 @@ public:
     // Groups achievements into sections; an empty list shows a flat list.
     void setGroups(QList<AchievementGroup> groups);
     void setLanguage(const QString &language);
+    // Percent of players per achievement ID.
+    void setRarity(QHash<QString, double> rarity);
+    // Current values of the stats, by ID: the progress of achievements.
+    void setStatValues(QHash<QString, double> values);
     const QList<Achievement> &achievements() const { return m_achievements; }
 
     bool isGrouped() const { return !m_sections.isEmpty(); }
@@ -156,6 +166,8 @@ private:
     QList<AchievementGroup> m_groups;
     QList<Section> m_sections;
     QList<Location> m_locations; // per achievement, when grouped
+    QHash<QString, double> m_rarity;
+    QHash<QString, double> m_statValues;
 };
 
 class AchievementFilterModel : public QSortFilterProxyModel
@@ -178,6 +190,8 @@ public:
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+    // Sections keep their order whatever the sort; achievements sort within them.
+    bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
 
 private:
     QString m_search;

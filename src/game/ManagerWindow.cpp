@@ -26,11 +26,13 @@
 
 #include "AchievementDelegate.h"
 #include "AchievementModel.h"
+#include "AchievementRarity.h"
 #include "Application.h"
 #include "DiscordPresence.h"
 #include "Icons.h"
 #include "ImageCache.h"
 #include "Languages.h"
+#include "PlayTimes.h"
 #include "StatsModel.h"
 #include "TitleBar.h"
 
@@ -189,6 +191,11 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
     updateHeaderImage();
     updateSummary();
     applyGroups(); // downloads in parallel with the stats request
+    requestAchievementRarity(m_appId, this, [this](QHash<QString, double> rarity) {
+        m_achievements->setRarity(std::move(rarity));
+    });
+    // Achievements unlocked by stats show how far the stat is, edits included.
+    connect(m_stats, &StatsModel::changesUpdated, this, &ManagerWindow::updateStatValues);
     connect(m_discord, &DiscordPresence::statusChanged, this, [this](const QString &message, bool warning) {
         // Success stays visible next to the other permanent status bar items.
         m_discordLabel->setVisible(!warning);
@@ -302,6 +309,24 @@ QWidget *ManagerWindow::createHeader()
     side->setSpacing(4);
     side->addWidget(pageButton, 0, Qt::AlignRight);
     side->addStretch();
+
+    // The total playtime, as Steam last wrote it to its local files.
+    const QHash<uint32_t, PlayTime> playTimes = loadPlayTimes(m_client.steamId());
+    if (const auto it = playTimes.constFind(m_appId); it != playTimes.cend())
+    {
+        auto *totalLabel = new QLabel(tr("Total playtime: %1").arg(formatPlaytime(it->minutes)), header);
+        totalLabel->setForegroundRole(QPalette::PlaceholderText);
+        QString tip = tr("Steam's own count, as of when this window opened; it takes a while for Steam to add the "
+                         "current session.");
+        if (it->lastPlayed > 0)
+        {
+            tip += u'\n' +
+                   tr("Last played: %1")
+                       .arg(QLocale().toString(QDateTime::fromSecsSinceEpoch(it->lastPlayed), QLocale::ShortFormat));
+        }
+        totalLabel->setToolTip(tip);
+        side->addWidget(totalLabel, 0, Qt::AlignRight);
+    }
     side->addWidget(playTime, 0, Qt::AlignRight);
     layout->addLayout(side);
 
@@ -448,8 +473,15 @@ QWidget *ManagerWindow::createAchievementsPage()
     m_achievementView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_achievementView->header()->setStretchLastSection(false);
     m_achievementView->header()->setSectionResizeMode(AchievementModel::NameColumn, QHeaderView::Stretch);
+    m_achievementView->header()->setSectionResizeMode(AchievementModel::RarityColumn, QHeaderView::ResizeToContents);
     m_achievementView->header()->setSectionResizeMode(AchievementModel::UnlockTimeColumn,
                                                       QHeaderView::ResizeToContents);
+    // Clicking a column header sorts by it; a third click goes back to the
+    // order of the schema. No sort indicator at first, or the view would sort
+    // by the first column right away.
+    m_achievementView->header()->setSortIndicatorClearable(true);
+    m_achievementView->header()->setSortIndicator(-1, Qt::AscendingOrder);
+    m_achievementView->setSortingEnabled(true);
     m_achievementView->installEventFilter(this);
     connect(
         m_achievementView, &QTreeView::customContextMenuRequested, this, &ManagerWindow::showAchievementContextMenu);
@@ -606,6 +638,12 @@ void ManagerWindow::restoreSettings()
         resize(900, 680);
     }
     m_tabs->setCurrentIndex(store.value(QStringLiteral("game/tab"), 0).toInt());
+    const int sortColumn = store.value(QStringLiteral("game/sortColumn"), -1).toInt();
+    if (sortColumn >= 0 && sortColumn < AchievementModel::ColumnCount)
+    {
+        m_achievementView->sortByColumn(
+            sortColumn, static_cast<Qt::SortOrder>(store.value(QStringLiteral("game/sortOrder"), 0).toInt()));
+    }
 }
 
 void ManagerWindow::closeEvent(QCloseEvent *event)
@@ -627,6 +665,9 @@ void ManagerWindow::closeEvent(QCloseEvent *event)
     }
     settings().setValue(QStringLiteral("game/geometry"), saveGeometry());
     settings().setValue(QStringLiteral("game/tab"), m_tabs->currentIndex());
+    settings().setValue(QStringLiteral("game/sortColumn"), m_achievementView->header()->sortIndicatorSection());
+    settings().setValue(QStringLiteral("game/sortOrder"),
+                        static_cast<int>(m_achievementView->header()->sortIndicatorOrder()));
     QMainWindow::closeEvent(event);
 }
 
@@ -709,6 +750,7 @@ void ManagerWindow::onUserStatsReceived(const steam::UserStatsReceived &message)
     applyLanguage();
     loadAchievements();
     loadStatistics();
+    updateStatValues();
     setBusy(false);
 
     showStatusMessage(tr("Retrieved %1 and %2.")
@@ -774,6 +816,32 @@ void ManagerWindow::loadStatistics()
         stats.append(std::move(stat));
     }
     m_stats->setStats(std::move(stats));
+}
+
+void ManagerWindow::updateStatValues()
+{
+    QHash<QString, double> values;
+    for (const auto &stat : m_stats->stats())
+    {
+        values.insert(stat.definition.id, stat.isInteger() ? stat.intValue : stat.floatValue);
+    }
+    m_achievements->setStatValues(std::move(values));
+}
+
+void ManagerWindow::showStat(const QString &id)
+{
+    const auto &stats = m_stats->stats();
+    for (int row = 0; row < stats.size(); ++row)
+    {
+        if (stats.at(row).definition.id == id)
+        {
+            m_tabs->setCurrentIndex(1);
+            m_statsView->selectRow(row);
+            m_statsView->scrollTo(m_stats->index(row, 0), QAbstractItemView::PositionAtCenter);
+            m_statsView->setFocus();
+            return;
+        }
+    }
 }
 
 QString ManagerWindow::effectiveLanguage() const
@@ -1121,6 +1189,14 @@ void ManagerWindow::showAchievementContextMenu(const QPoint &position)
         applyToAchievements(modified, RevertMode);
     });
     revert->setEnabled(!modified.isEmpty());
+
+    const QString stat = source.data(AchievementModel::ProgressStatRole).toString();
+    if (source.data(AchievementModel::ProgressValueRole).isValid())
+    {
+        menu.addAction(icons::get(QStringLiteral("stats")), tr("Show the &stat it's unlocked by"), this, [this, stat] {
+            showStat(stat);
+        });
+    }
 
     menu.addSeparator();
     const QString name = source.data(Qt::DisplayRole).toString();

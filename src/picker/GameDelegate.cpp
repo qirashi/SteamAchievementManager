@@ -25,6 +25,8 @@
 #include "GameDelegate.h"
 
 #include "GameListModel.h"
+#include "Icons.h"
+#include "PlayTimes.h"
 
 #include <QApplication>
 #include <QPainter>
@@ -186,6 +188,29 @@ void GameDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, 
         painter->setPen(Qt::white);
         painter->setFont(font);
         painter->drawText(badgeRect, Qt::AlignCenter, badge);
+    }
+
+    // Playtime, at the bottom left of the artwork.
+    if (const int minutes = index.data(GameListModel::PlaytimeRole).toInt(); minutes > 0)
+    {
+        QFont font = option.font;
+        font.setPointSizeF(font.pointSizeF() * 0.8);
+        font.setBold(true);
+        const QFontMetricsF metrics(font);
+        const QString text = formatPlaytime(minutes);
+        const qreal iconSize = metrics.height() - 3;
+        const QRectF pill(imageRect.left() + 5,
+                          imageRect.bottom() - metrics.height() - 7,
+                          metrics.horizontalAdvance(text) + iconSize + 14,
+                          metrics.height() + 2);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(0, 0, 0, 170));
+        painter->drawRoundedRect(pill, 4, 4);
+        const QRectF iconRect(pill.left() + 5, pill.center().y() - iconSize / 2, iconSize, iconSize);
+        icons::get(QStringLiteral("play"), QColor(0x5f, 0xd3, 0x76)).paint(painter, iconRect.toAlignedRect());
+        painter->setPen(Qt::white);
+        painter->setFont(font);
+        painter->drawText(pill.adjusted(iconSize + 8, 0, -5, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
     }
 
     // Name.

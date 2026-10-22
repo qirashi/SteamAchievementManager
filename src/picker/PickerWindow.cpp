@@ -31,6 +31,7 @@
 #include "Languages.h"
 #include "TitleBar.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -211,9 +212,38 @@ void PickerWindow::createToolBar()
             m_filter->setTypeVisible(action->data().toString(), checked);
         });
     }
+    // Steam's store category 22 ("Steam Achievements") says which games have any.
+    m_noAchievementsAction = filterMenu->addAction(tr("Show games &without achievements"));
+    m_noAchievementsAction->setCheckable(true);
+    m_noAchievementsAction->setChecked(true);
+    connect(m_noAchievementsAction, &QAction::toggled, m_filter, &GameFilterModel::setShowWithoutAchievements);
+
+    filterMenu->addSection(tr("Sort"));
+    auto *sortGroup = new QActionGroup(filterMenu);
+    const struct
+    {
+        GameFilterModel::SortMode mode;
+        const char *label;
+    } sorts[] = {
+        {GameFilterModel::SortMode::Name, QT_TR_NOOP("By &name")},
+        {GameFilterModel::SortMode::LastPlayed, QT_TR_NOOP("&Recently played")},
+        {GameFilterModel::SortMode::Playtime, QT_TR_NOOP("By &playtime")},
+    };
+    for (const auto &sort : sorts)
+    {
+        auto *action = filterMenu->addAction(tr(sort.label));
+        action->setCheckable(true);
+        action->setData(static_cast<int>(sort.mode));
+        sortGroup->addAction(action);
+        m_sortActions.append(action);
+        connect(action, &QAction::triggered, this, [this, mode = sort.mode] {
+            m_filter->setSortMode(mode);
+        });
+    }
+    m_sortActions.first()->setChecked(true);
     auto *filterButton = new QToolButton(toolBar);
     filterButton->setIcon(icons::get(QStringLiteral("filter")));
-    filterButton->setToolTip(tr("Choose which kinds of apps are listed"));
+    filterButton->setToolTip(tr("Choose which apps are listed and how they're sorted"));
     filterButton->setPopupMode(QToolButton::InstantPopup);
     filterButton->setMenu(filterMenu);
     toolBar->addWidget(filterButton);
@@ -334,6 +364,16 @@ void PickerWindow::restoreSettings()
         action->setChecked(visible);
         m_filter->setTypeVisible(type, visible);
     }
+    m_noAchievementsAction->setChecked(store.value(QStringLiteral("show/noAchievements"), true).toBool());
+    const int sort = store.value(QStringLiteral("sort"), 0).toInt();
+    for (auto *action : std::as_const(m_sortActions))
+    {
+        if (action->data().toInt() == sort)
+        {
+            action->setChecked(true);
+            m_filter->setSortMode(static_cast<GameFilterModel::SortMode>(sort));
+        }
+    }
     store.endGroup();
     setZoom(m_zoom->value());
 }
@@ -347,6 +387,14 @@ void PickerWindow::closeEvent(QCloseEvent *event)
     for (auto *action : std::as_const(m_typeActions))
     {
         store.setValue(QStringLiteral("show/") + action->data().toString(), action->isChecked());
+    }
+    store.setValue(QStringLiteral("show/noAchievements"), m_noAchievementsAction->isChecked());
+    for (auto *action : std::as_const(m_sortActions))
+    {
+        if (action->isChecked())
+        {
+            store.setValue(QStringLiteral("sort"), action->data().toInt());
+        }
     }
     store.endGroup();
     QMainWindow::closeEvent(event);
@@ -416,6 +464,7 @@ void PickerWindow::refreshGames()
     m_totalToCheck = 0;
     m_listError.clear();
     m_refreshAction->setEnabled(false);
+    m_playTimes = loadPlayTimes(m_client.steamId());
 
     // Start with the list from the previous run (instant), then merge in
     // whatever is new once the download finishes.
@@ -611,7 +660,21 @@ void PickerWindow::addGameIfOwned(uint32_t id, const QString &type)
     {
         game.name = QStringLiteral("App %1").arg(id);
     }
+    fillGameInfo(game);
     m_model->addGame(game);
+}
+
+void PickerWindow::fillGameInfo(GameInfo &game) const
+{
+    const PlayTime time = m_playTimes.value(game.id);
+    game.playtime = time.minutes;
+    game.lastPlayed = time.lastPlayed;
+    game.hasAchievements = hasAchievements(game.id);
+}
+
+bool PickerWindow::hasAchievements(uint32_t id) const
+{
+    return m_client.appData(id, "category/category_22") == QLatin1StringView("1");
 }
 
 QString PickerWindow::resolveImageUrl(uint32_t id) const
@@ -643,6 +706,7 @@ void PickerWindow::onAppDataChanged(const steam::AppDataChanged &message)
         return;
     }
     m_model->setName(message.appId, m_client.appData(message.appId, "name"));
+    m_model->setHasAchievements(message.appId, hasAchievements(message.appId));
     m_model->invalidateImage(message.appId);
 }
 
@@ -676,6 +740,7 @@ void PickerWindow::addGameById()
         {
             game.name = QStringLiteral("App %1").arg(id);
         }
+        fillGameInfo(game);
         m_model->addGame(game);
     }
 

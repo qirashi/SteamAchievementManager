@@ -108,6 +108,10 @@ private:
     void setBusy(bool busy, const QString &message = {});
     void updateSummary();
     void updatePlayTime();
+    // Passes the values of the stats to the achievements unlocked by them.
+    void updateStatValues();
+    // Switches to the statistics page and selects the stat `id`.
+    void showStat(const QString &id);
     void updateHeaderImage();
     void updateDownloadStatus(int pending);
     void showStatusMessage(const QString &message, bool warning = false);

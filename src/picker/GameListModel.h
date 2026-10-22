@@ -43,6 +43,9 @@ struct GameInfo
     uint32_t id = 0;
     QString name;
     QString type;
+    int playtime = 0;      // minutes
+    qint64 lastPlayed = 0; // seconds since the epoch, 0 if never
+    bool hasAchievements = true;
 };
 
 class GameListModel : public QAbstractListModel
@@ -56,6 +59,9 @@ public:
         TypeRole,
         ImageRole,
         ImageFailedRole,
+        PlaytimeRole,   // minutes
+        LastPlayedRole, // seconds since the epoch, 0 if never
+        HasAchievementsRole,
     };
 
     using ImageUrlResolver = std::function<QString(uint32_t)>;
@@ -69,6 +75,7 @@ public:
     // Returns false if the game was already present.
     bool addGame(const GameInfo &game);
     void setName(uint32_t id, const QString &name);
+    void setHasAchievements(uint32_t id, bool hasAchievements);
     QModelIndex indexOf(uint32_t id) const;
     bool contains(uint32_t id) const { return m_rows.contains(id); }
 
@@ -98,6 +105,15 @@ public:
     void setTypeVisible(const QString &type, bool visible);
     bool isTypeVisible(const QString &type) const { return !m_hiddenTypes.contains(type); }
 
+    enum class SortMode
+    {
+        Name,
+        LastPlayed, // most recent first, never played last
+        Playtime,   // longest first
+    };
+    void setSortMode(SortMode mode);
+    void setShowWithoutAchievements(bool show);
+
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
     bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
@@ -105,5 +121,7 @@ protected:
 private:
     QString m_search;
     QSet<QString> m_hiddenTypes;
+    SortMode m_sortMode = SortMode::Name;
+    bool m_showWithoutAchievements = true;
 };
 } // namespace sam

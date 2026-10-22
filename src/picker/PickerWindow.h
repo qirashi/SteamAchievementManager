@@ -25,8 +25,10 @@
 #pragma once
 
 #include "GameListModel.h"
+#include "PlayTimes.h"
 #include "SteamClient.h"
 
+#include <QHash>
 #include <QList>
 #include <QMainWindow>
 #include <QPair>
@@ -74,6 +76,9 @@ private:
     void enqueue(const QList<GameEntry> &entries);
     void checkOwnershipBatch();
     void addGameIfOwned(uint32_t id, const QString &type);
+    // Playtime, last launch and whether it has achievements.
+    void fillGameInfo(GameInfo &game) const;
+    bool hasAchievements(uint32_t id) const;
 
     QString resolveImageUrl(uint32_t id) const;
     void onAppDataChanged(const steam::AppDataChanged &message);
@@ -101,6 +106,9 @@ private:
     QAction *m_addOkAction = nullptr;
     QAction *m_refreshAction = nullptr;
     QList<QAction *> m_typeActions;
+    QAction *m_noAchievementsAction = nullptr;
+    QList<QAction *> m_sortActions;
+    QHash<uint32_t, PlayTime> m_playTimes;
 
     QLabel *m_statusLabel = nullptr;
     QLabel *m_downloadLabel = nullptr;

@@ -28,11 +28,15 @@
 #include "Icons.h"
 #include "Style.h"
 
+#include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QTextLayout>
 #include <QTreeView>
+#include <QtMath>
+
+#include <algorithm>
 
 namespace sam
 {
@@ -48,6 +52,7 @@ const QColor kOrange(0xd2, 0x8a, 0x22);
 const QColor kRed(0xd7, 0x3a, 0x49);
 const QColor kBlue(0x3b, 0x82, 0xf6);
 const QColor kPurple(0x8b, 0x5c, 0xf6);
+const QColor kGold(0xe3, 0xa0, 0x08);
 
 // A section and its achievements are painted as one rounded card, inset from
 // the sides of the list; a gap above each section separates the cards.
@@ -364,6 +369,99 @@ void AchievementDelegate::paintSection(QPainter *painter,
     painter->restore();
 }
 
+int AchievementDelegate::paintProgress(QPainter *painter,
+                                       const QStyleOptionViewItem &option,
+                                       const QRect &rect,
+                                       double value,
+                                       double maximum,
+                                       bool selected) const
+{
+    constexpr int kBarWidth = 110;
+    const QPalette &palette = option.palette;
+    const QColor textColor = palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
+    QColor secondary = textColor;
+    secondary.setAlphaF(0.68f);
+    const double fraction = std::clamp(value / maximum, 0.0, 1.0);
+
+    const QLocale locale;
+    const QString text =
+        QStringLiteral("%1 / %2").arg(locale.toString(qMin(value, maximum), 'f', 0), locale.toString(maximum, 'f', 0));
+    const QFontMetricsF metrics(option.font);
+    const qreal textWidth = metrics.horizontalAdvance(text);
+    const qreal centerY = rect.center().y() + 0.5;
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    const QRectF bar(rect.right() - kBarWidth, centerY - 2.5, kBarWidth, 5);
+    QColor trough = textColor;
+    trough.setAlphaF(0.12f);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(trough);
+    painter->drawRoundedRect(bar, 2.5, 2.5);
+    if (fraction > 0)
+    {
+        painter->setBrush(fraction >= 1.0 ? kGreen : accentColor());
+        painter->drawRoundedRect(QRectF(bar.topLeft(), QSizeF(bar.width() * fraction, bar.height())), 2.5, 2.5);
+    }
+    painter->setFont(option.font);
+    painter->setPen(secondary);
+    const QRectF textRect(bar.left() - 8 - textWidth, rect.top(), textWidth + 1, rect.height());
+    painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
+    painter->restore();
+    return qFloor(textRect.left());
+}
+
+void AchievementDelegate::paintRarity(QPainter *painter,
+                                      const QStyleOptionViewItem &option,
+                                      const QModelIndex &index) const
+{
+    const QVariant rarity = index.data(AchievementModel::RarityRole);
+    if (!rarity.isValid())
+    {
+        return;
+    }
+    const double percent = rarity.toDouble();
+    const bool selected = option.state & QStyle::State_Selected;
+    const QPalette &palette = option.palette;
+    const bool darkBase = palette.color(QPalette::Base).lightness() < 128;
+    QColor color = palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
+    // Rare ones stand out: gold under 5 %, plain text under 20 %, faded above.
+    if (!selected && percent < 5.0)
+    {
+        color = darkBase ? kGold.lighter(130) : kGold.darker(115);
+    }
+    else if (!selected && percent >= 20.0)
+    {
+        color.setAlphaF(0.6f);
+    }
+
+    const QRect rect = option.rect.adjusted(8, 0, -10, 0);
+    QFont font = option.font;
+    font.setBold(percent < 5.0);
+    const QFontMetricsF metrics(font);
+    const qreal lineHeight = metrics.height();
+    const QRectF textRect(rect.left(), rect.center().y() - lineHeight + 1, rect.width(), lineHeight);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setFont(font);
+    painter->setPen(color);
+    painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, index.data(Qt::DisplayRole).toString());
+
+    // A small bar under the number: how common it is.
+    constexpr qreal kBarWidth = 44;
+    const QRectF bar(rect.right() - kBarWidth, textRect.bottom() + 4, kBarWidth, 3);
+    QColor trough = palette.color(QPalette::Text);
+    trough.setAlphaF(0.12f);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(trough);
+    painter->drawRoundedRect(bar, 1.5, 1.5);
+    painter->setBrush(color);
+    painter->drawRoundedRect(
+        QRectF(bar.topLeft(), QSizeF(qMax(2.0, kBarWidth * percent / 100), bar.height())), 1.5, 1.5);
+    painter->restore();
+}
+
 void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     if (index.data(AchievementModel::SectionRole).toBool())
@@ -373,6 +471,11 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     }
     paintBackground(painter, option, index);
     const bool selected = option.state & QStyle::State_Selected;
+    if (index.column() == AchievementModel::RarityColumn)
+    {
+        paintRarity(painter, option, index);
+        return;
+    }
     if (index.column() != AchievementModel::NameColumn)
     {
         // Only the text: the background is the card's.
@@ -466,9 +569,23 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     }
     painter->restore();
 
+    // Progress towards the achievement on the right, while it's locked.
+    int textRight = rect.right() - kPadding;
+    const QVariant progressValue = index.data(AchievementModel::ProgressValueRole);
+    if (progressValue.isValid() && !checked)
+    {
+        textRight = paintProgress(painter,
+                                  option,
+                                  QRect(rect.left(), rect.top(), rect.width() - kPadding, rect.height()),
+                                  progressValue.toDouble(),
+                                  index.data(AchievementModel::ProgressMaxRole).toDouble(),
+                                  selected) -
+                    16;
+    }
+
     // Text.
     const int textLeft = iconRect.right() + 1 + 12;
-    const int textWidth = rect.right() - textLeft - kPadding;
+    const int textWidth = textRight - textLeft;
     const QColor textColor = palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
     QColor secondary = textColor;
     secondary.setAlphaF(0.68f);

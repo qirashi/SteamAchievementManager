@@ -43,7 +43,7 @@ namespace
 {
 constexpr int kBarHeight = 30;
 constexpr int kButtonWidth = 46;
-constexpr int kIconSize = 18;
+constexpr int kIconSize = 24;
 constexpr int kCaptionHeight = 22;
 constexpr int kCaptionGap = 16;
 
@@ -82,7 +82,7 @@ public:
         layout->setSpacing(0);
 
         m_icon = new QLabel(m_bar);
-        m_icon->setContentsMargins(10, 0, 6, 0);
+        m_icon->setContentsMargins(8, 0, 6, 0);
         updateIcon();
         layout->addWidget(m_icon);
         layout->addStretch();
