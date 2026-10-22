@@ -28,6 +28,7 @@
 #include "Schema.h"
 #include "SteamClient.h"
 
+#include <QFileSystemWatcher>
 #include <QMainWindow>
 #include <QSet>
 #include <QTimer>
@@ -70,18 +71,20 @@ private:
     QWidget *createHeader();
     QWidget *createAchievementsPage();
     QWidget *createStatisticsPage();
-    void createToolBar();
+    void createActions();
+    QToolButton *createActionButton(QAction *action, QWidget *parent);
     void createStatusBar();
     void restoreSettings();
+    void onSettingsChanged(const QString &path);
 
     void refreshStats();
     void onUserStatsReceived(const steam::UserStatsReceived &message);
     void loadAchievements();
     void loadStatistics();
-    void populateLanguages();
     QString effectiveLanguage() const;
     void applyLanguage();
     bool isGroupingEnabled() const;
+    bool isDiscordPresenceEnabled() const;
     void applyGroups();
     void restoreSectionExpansion();
 
@@ -114,6 +117,8 @@ private:
     std::optional<Schema> m_schema;
     std::optional<QList<AchievementGroup>> m_groups; // set once downloaded
     bool m_groupsRequested = false;
+    bool m_groupingApplied = false;
+    QFileSystemWatcher m_settingsWatcher;
     QSet<QString> m_collapsedSections;
     bool m_busy = false;
 
@@ -129,13 +134,10 @@ private:
     QLabel *m_summaryLabel = nullptr;
     QProgressBar *m_summaryProgress = nullptr;
 
-    // Toolbar
+    // Actions (buttons on the pages)
     QAction *m_storeAction = nullptr;
     QAction *m_refreshAction = nullptr;
     QAction *m_resetAction = nullptr;
-    QMenu *m_languageMenu = nullptr;
-    QAction *m_groupAction = nullptr;
-    QAction *m_discordAction = nullptr;
 
     // Pages
     QTabWidget *m_tabs = nullptr;

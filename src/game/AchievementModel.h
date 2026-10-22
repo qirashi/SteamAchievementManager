@@ -111,10 +111,11 @@ public:
     int achievementIndex(const QModelIndex &index) const;
     QList<int> sectionMembers(int section) const;
 
-    // Sets/toggles the state of the given achievements; protected ones are
-    // skipped. Returns how many protected achievements were skipped.
+    // Sets the state of the given achievements; protected ones are skipped.
+    // Returns how many protected achievements were skipped.
     int setChecked(const QList<int> &rows, bool checked);
-    int invert(const QList<int> &rows);
+    // Puts the given achievements back to the state reported by Steam.
+    int revert(const QList<int> &rows);
 
     int achievementCount() const { return static_cast<int>(m_achievements.size()); }
     int modifiedCount() const;

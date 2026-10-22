@@ -55,6 +55,8 @@ QNetworkAccessManager *network();
 
 Theme theme();
 void setTheme(Theme theme);
+// Applies the theme in the settings if another process changed it.
+void applySavedTheme();
 
 // Empty string means "follow the system language".
 QString interfaceLanguage();

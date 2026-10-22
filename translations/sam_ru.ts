@@ -231,14 +231,6 @@
         <translation>Снять все показанные достижения</translation>
     </message>
     <message>
-        <source>Invert</source>
-        <translation>Инвертировать</translation>
-    </message>
-    <message>
-        <source>Invert the state of all shown achievements</source>
-        <translation>Инвертировать состояние всех показанных достижений</translation>
-    </message>
-    <message>
         <source>Unlock all</source>
         <translation>Получить все</translation>
     </message>
@@ -249,10 +241,6 @@
     <message>
         <source>I understand by modifying the values of stats, I may screw things up and can't blame anyone but myself.</source>
         <translation>Я понимаю, что изменяя значения статистики, могу всё испортить и винить в этом смогу только себя.</translation>
-    </message>
-    <message>
-        <source>Main</source>
-        <translation>Главная</translation>
     </message>
     <message>
         <source>Save changes</source>
@@ -285,18 +273,6 @@
     <message>
         <source>Open the achievements page in the browser</source>
         <translation>Открыть страницу достижений в браузере</translation>
-    </message>
-    <message>
-        <source>Settings</source>
-        <translation>Настройки</translation>
-    </message>
-    <message>
-        <source>&amp;Group by DLC (steamhunters.com)</source>
-        <translation>&amp;Группировать по DLC (steamhunters.com)</translation>
-    </message>
-    <message>
-        <source>Show the game in &amp;Discord</source>
-        <translation>Показывать игру в &amp;Discord</translation>
     </message>
     <message>
         <source>Discord: playing</source>
@@ -423,10 +399,6 @@
         <translation>&amp;Снять выбранные</translation>
     </message>
     <message>
-        <source>&amp;Invert selected</source>
-        <translation>&amp;Инвертировать выбранные</translation>
-    </message>
-    <message>
         <source>&amp;Revert changes</source>
         <translation>&amp;Отменить изменения</translation>
     </message>
@@ -445,10 +417,6 @@
     <message>
         <source>&amp;Lock all in this section</source>
         <translation>&amp;Снять все в этом разделе</translation>
-    </message>
-    <message>
-        <source>&amp;Invert this section</source>
-        <translation>&amp;Инвертировать раздел</translation>
     </message>
     <message>
         <source>&amp;Expand all</source>
@@ -489,6 +457,10 @@
     <message>
         <source>Save changes (%1)</source>
         <translation>Сохранить изменения (%1)</translation>
+    </message>
+    <message numerus="yes">
+        <source>Save %n change(s) to Steam (Ctrl+S)</source>
+        <translation><numerusform>Сохранить %n изменение в Steam (Ctrl+S)</numerusform><numerusform>Сохранить %n изменения в Steam (Ctrl+S)</numerusform><numerusform>Сохранить %n изменений в Steam (Ctrl+S)</numerusform></translation>
     </message>
     <message>
         <source>Achievements (%1) •</source>
@@ -546,10 +518,6 @@
         <translation>Фильтр списка по названию игры или App ID (Ctrl+F)</translation>
     </message>
     <message>
-        <source>Show</source>
-        <translation>Показать</translation>
-    </message>
-    <message>
         <source>Choose which kinds of apps are listed</source>
         <translation>Выберите, какие типы приложений показывать</translation>
     </message>
@@ -571,7 +539,11 @@
     </message>
     <message>
         <source>Add game</source>
-        <translation>Добавить</translation>
+        <translation>Добавить игру</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Add the game with this App ID to the list</source>
@@ -580,6 +552,14 @@
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>&amp;Group by DLC (steamhunters.com)</source>
+        <translation>&amp;Группировать по DLC (steamhunters.com)</translation>
+    </message>
+    <message>
+        <source>Show the game in &amp;Discord</source>
+        <translation>Показывать игру в &amp;Discord</translation>
     </message>
     <message>
         <source>Tile size (Ctrl+mouse wheel)</source>

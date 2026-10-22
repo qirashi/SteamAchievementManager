@@ -411,27 +411,24 @@ int AchievementModel::setChecked(const QList<int> &rows, bool checked)
     return skipped;
 }
 
-int AchievementModel::invert(const QList<int> &rows)
+int AchievementModel::revert(const QList<int> &rows)
 {
-    int skipped = 0;
     bool changed = false;
     for (const int row : rows)
     {
         Achievement &achievement = m_achievements[row];
-        if (achievement.isProtected())
+        if (achievement.isModified())
         {
-            ++skipped;
-            continue;
+            achievement.checked = achievement.achieved;
+            emitRowChanged(row);
+            changed = true;
         }
-        achievement.checked = !achievement.checked;
-        emitRowChanged(row);
-        changed = true;
     }
     if (changed)
     {
         emit changesUpdated();
     }
-    return skipped;
+    return 0; // protected achievements are never modified
 }
 
 int AchievementModel::modifiedCount() const

@@ -26,6 +26,7 @@
 
 #include "Icons.h"
 #include "Languages.h"
+#include "Style.h"
 #include "Version.h"
 
 #include <QActionGroup>
@@ -40,8 +41,8 @@
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QStyleFactory>
 #include <QStyleHints>
+#include <QTimer>
 #include <QTranslator>
 
 namespace sam
@@ -49,9 +50,13 @@ namespace sam
 namespace
 {
 QString g_component;
+Theme g_appliedTheme = Theme::System;
 
 void applyTheme(Theme theme)
 {
+    // The color scheme also reaches native parts (dialogs); the palette and
+    // style sheet follow it (see initializeApplication).
+    g_appliedTheme = theme;
     auto *hints = QGuiApplication::styleHints();
     switch (theme)
     {
@@ -59,6 +64,7 @@ void applyTheme(Theme theme)
         case Theme::Light: hints->setColorScheme(Qt::ColorScheme::Light); break;
         case Theme::Dark: hints->setColorScheme(Qt::ColorScheme::Dark); break;
     }
+    applyColorScheme(hints->colorScheme() == Qt::ColorScheme::Dark);
 }
 
 void installTranslations(QApplication &app)
@@ -138,8 +144,15 @@ void initializeApplication(QApplication &app, const QString &component)
     QCoreApplication::setApplicationVersion(QStringLiteral(SAM_VERSION_STRING));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Steam Achievement Manager"));
 
-    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    installStyle(app);
     applyTheme(theme());
+    // "Follow system": Windows switching between light and dark. Qt resets the
+    // palette on such a change, so ours goes back on afterwards.
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, &app, [](Qt::ColorScheme scheme) {
+        QTimer::singleShot(0, qApp, [scheme] {
+            applyColorScheme(scheme == Qt::ColorScheme::Dark);
+        });
+    });
     installTranslations(app);
 
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/sam/SAM.ico")));
@@ -185,7 +198,17 @@ void setTheme(Theme theme)
 {
     const char *value = theme == Theme::Light ? "light" : theme == Theme::Dark ? "dark" : "system";
     settings().setValue(QStringLiteral("ui/theme"), QString::fromLatin1(value));
+    settings().sync(); // open game windows follow it
     applyTheme(theme);
+}
+
+void applySavedTheme()
+{
+    const Theme saved = theme();
+    if (saved != g_appliedTheme)
+    {
+        applyTheme(saved);
+    }
 }
 
 QString interfaceLanguage()
@@ -301,6 +324,7 @@ void fillAchievementLanguageMenu(QMenu *menu,
         group->addAction(action);
         QObject::connect(action, &QAction::triggered, menu, [code, changed] {
             settings().setValue(QStringLiteral("game/achievementLanguage"), code);
+            settings().sync(); // open game windows follow it
             if (changed)
             {
                 changed();

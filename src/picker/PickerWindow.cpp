@@ -29,6 +29,7 @@
 #include "Icons.h"
 #include "ImageCache.h"
 #include "Languages.h"
+#include "TitleBar.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -38,6 +39,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -47,6 +49,7 @@
 #include <QNetworkReply>
 #include <QProcess>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QSaveFile>
 #include <QScrollBar>
@@ -109,6 +112,7 @@ PickerWindow::PickerWindow(steam::Client &client, QWidget *parent)
     , m_view(new QListView(this))
 {
     setWindowTitle(tr("Games"));
+    installTitleBar(this);
     m_language = m_client.currentGameLanguage();
 
     m_filter->setSourceModel(m_model);
@@ -123,8 +127,7 @@ PickerWindow::PickerWindow(steam::Client &client, QWidget *parent)
     m_view->setSelectionMode(QAbstractItemView::SingleSelection);
     m_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_view->verticalScrollBar()->setSingleStep(32);
-    // A permanent scroll bar keeps the tile layout from oscillating.
-    m_view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    // The scroll bar lies over the tiles (see Scrolling.h), so it never changes the layout.
     m_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_view->setFrameShape(QFrame::NoFrame);
     m_view->setMouseTracking(true);
@@ -175,7 +178,7 @@ void PickerWindow::createToolBar()
     toolBar->setObjectName(QStringLiteral("mainToolBar"));
     toolBar->setMovable(false);
     toolBar->setFloatable(false);
-    toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     toolBar->setIconSize(QSize(18, 18));
     toolBar->toggleViewAction()->setVisible(false);
 
@@ -183,7 +186,9 @@ void PickerWindow::createToolBar()
     m_search->setPlaceholderText(tr("Search by name or App ID…"));
     m_search->setClearButtonEnabled(true);
     m_search->addAction(icons::get(QStringLiteral("search")), QLineEdit::LeadingPosition);
-    m_search->setMinimumWidth(280);
+    // A fixed width keeps the buttons after it in place when the App ID field
+    // unfolds; the spacer after that field takes the rest.
+    m_search->setFixedWidth(360);
     m_search->setToolTip(tr("Filter the list by game name or App ID (Ctrl+F)"));
     connect(m_search, &QLineEdit::textChanged, m_filter, &GameFilterModel::setSearchText);
     connect(m_search, &QLineEdit::returnPressed, this, [this] {
@@ -208,9 +213,7 @@ void PickerWindow::createToolBar()
     }
     auto *filterButton = new QToolButton(toolBar);
     filterButton->setIcon(icons::get(QStringLiteral("filter")));
-    filterButton->setText(tr("Show"));
     filterButton->setToolTip(tr("Choose which kinds of apps are listed"));
-    filterButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     filterButton->setPopupMode(QToolButton::InstantPopup);
     filterButton->setMenu(filterMenu);
     toolBar->addWidget(filterButton);
@@ -220,19 +223,26 @@ void PickerWindow::createToolBar()
     m_refreshAction->setToolTip(tr("Reload the list of owned games (F5)"));
     connect(m_refreshAction, &QAction::triggered, this, &PickerWindow::refreshGames);
 
-    toolBar->addSeparator();
+    // "Add game" unfolds an App ID field with an OK button right after it.
+    m_addAction = toolBar->addAction(icons::get(QStringLiteral("add")), tr("Add game"));
+    m_addAction->setToolTip(tr("Add a game that isn't in the list by its App ID"));
+    m_addAction->setCheckable(true);
+    connect(m_addAction, &QAction::toggled, this, &PickerWindow::setAddFieldVisible);
 
     m_addEdit = new QLineEdit(toolBar);
     m_addEdit->setPlaceholderText(tr("App ID"));
     m_addEdit->setValidator(
         new QRegularExpressionValidator(QRegularExpression(QStringLiteral("\\d{1,10}")), m_addEdit));
     m_addEdit->setFixedWidth(100);
-    m_addEdit->setToolTip(tr("Add a game that isn't in the list by its App ID"));
-    toolBar->addWidget(m_addEdit);
-    auto *addAction = toolBar->addAction(icons::get(QStringLiteral("add")), tr("Add game"));
-    addAction->setToolTip(tr("Add the game with this App ID to the list"));
-    connect(addAction, &QAction::triggered, this, &PickerWindow::addGameById);
+    m_addEdit->installEventFilter(this); // Esc folds it again
     connect(m_addEdit, &QLineEdit::returnPressed, this, &PickerWindow::addGameById);
+    m_addEditAction = toolBar->addWidget(m_addEdit);
+
+    auto *okButton = new QPushButton(tr("OK"), toolBar);
+    okButton->setToolTip(tr("Add the game with this App ID to the list"));
+    connect(okButton, &QPushButton::clicked, this, &PickerWindow::addGameById);
+    m_addOkAction = toolBar->addWidget(okButton);
+    setAddFieldVisible(false);
 
     auto *spacer = new QWidget(toolBar);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -242,12 +252,27 @@ void PickerWindow::createToolBar()
     settingsButton->setIcon(icons::get(QStringLiteral("menu")));
     settingsButton->setToolTip(tr("Settings"));
     settingsButton->setPopupMode(QToolButton::InstantPopup);
-    // The achievement language is used by the manager windows opened from here.
+    // The only settings menu: the game windows follow it (they watch the
+    // settings file), including the ones already open.
     auto *settingsMenu = createSettingsMenu(this);
+    QAction *first = settingsMenu->actions().value(0);
     auto *languageMenu = createAchievementLanguageMenu(settingsMenu);
     fillAchievementLanguageMenu(languageMenu, languages::allCodes(), m_language);
-    settingsMenu->insertMenu(settingsMenu->actions().value(0), languageMenu);
-    settingsMenu->insertSeparator(settingsMenu->actions().value(1));
+    settingsMenu->insertMenu(first, languageMenu);
+    // Toggles have no icon: a menu item shows its icon instead of its check box.
+    const auto addToggle = [&](const QString &text, const QString &key, bool defaultValue) {
+        auto *action = new QAction(text, settingsMenu);
+        action->setCheckable(true);
+        action->setChecked(settings().value(key, defaultValue).toBool());
+        connect(action, &QAction::toggled, this, [key](bool checked) {
+            settings().setValue(key, checked);
+            settings().sync();
+        });
+        settingsMenu->insertAction(first, action);
+    };
+    addToggle(tr("&Group by DLC (steamhunters.com)"), QStringLiteral("game/groupAchievements"), true);
+    addToggle(tr("Show the game in &Discord"), QStringLiteral("game/discordPresence"), false);
+    settingsMenu->insertSeparator(first);
     settingsButton->setMenu(settingsMenu);
     toolBar->addWidget(settingsButton);
 }
@@ -329,6 +354,12 @@ void PickerWindow::closeEvent(QCloseEvent *event)
 
 bool PickerWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_addEdit && event->type() == QEvent::KeyPress &&
+        static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape)
+    {
+        m_addAction->setChecked(false);
+        return true;
+    }
     if (watched == m_view->viewport() && event->type() == QEvent::Resize)
     {
         updateTileWidth();
@@ -632,13 +663,27 @@ void PickerWindow::addGameById()
         }
     }
     m_search->clear();
-    m_addEdit->clear();
+    m_addAction->setChecked(false);
     const QModelIndex index = m_filter->mapFromSource(m_model->indexOf(id));
     if (index.isValid())
     {
         m_view->setCurrentIndex(index);
         m_view->scrollTo(index, QAbstractItemView::PositionAtCenter);
         m_view->setFocus();
+    }
+}
+
+void PickerWindow::setAddFieldVisible(bool visible)
+{
+    m_addEditAction->setVisible(visible);
+    m_addOkAction->setVisible(visible);
+    if (visible)
+    {
+        m_addEdit->setFocus();
+    }
+    else
+    {
+        m_addEdit->clear();
     }
 }
 

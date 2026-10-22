@@ -19,7 +19,9 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 set(CMAKE_INSTALL_BINDIR ".")
 
-find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui Widgets Network Svg LinguistTools)
+# GuiPrivate: the custom title bar sets the frame margins of the native window (TitleBar.cpp).
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui GuiPrivate Widgets Network Svg LinguistTools)
 qt_standard_project_setup(REQUIRES 6.10)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -42,9 +44,13 @@ qt_add_library(sam_core STATIC
     src/core/Languages.h
     src/core/SteamClient.cpp
     src/core/SteamClient.h
+    src/core/Style.cpp
+    src/core/Style.h
+    src/core/TitleBar.cpp
+    src/core/TitleBar.h
 )
 target_include_directories(sam_core PUBLIC src/core "${CMAKE_BINARY_DIR}/generated")
-target_link_libraries(sam_core PUBLIC Qt6::Widgets Qt6::Network Qt6::Svg)
+target_link_libraries(sam_core PUBLIC Qt6::Widgets Qt6::Network Qt6::Svg PRIVATE Qt6::GuiPrivate)
 qt_add_resources(sam_core "sam_assets"
     PREFIX "/sam"
     BASE resources

@@ -32,6 +32,7 @@
 #include "ImageCache.h"
 #include "Languages.h"
 #include "StatsModel.h"
+#include "TitleBar.h"
 
 #include <QApplication>
 #include <QButtonGroup>
@@ -56,7 +57,6 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTableView>
-#include <QToolBar>
 #include <QToolButton>
 #include <QTreeView>
 #include <QUrl>
@@ -74,7 +74,7 @@ enum BulkMode
 {
     LockMode,
     UnlockMode,
-    InvertMode,
+    RevertMode, // back to the state reported by Steam
 };
 
 constexpr QSize kHeaderImageSize(184, 69);
@@ -108,6 +108,20 @@ QPixmap roundedPixmap(const QImage &image, const QSize &size, qreal dpr)
                       image);
     return pixmap;
 }
+
+// Puts a list into a rounded block (see Style.cpp); the list itself is
+// transparent so the corners of the block stay visible.
+QWidget *createListBlock(QAbstractItemView *view, QWidget *parent)
+{
+    auto *block = new QFrame(parent);
+    block->setObjectName(QStringLiteral("listBlock"));
+    auto *layout = new QVBoxLayout(block);
+    layout->setContentsMargins(1, 1, 1, 1);
+    layout->setSpacing(0);
+    view->setFrameShape(QFrame::NoFrame);
+    layout->addWidget(view);
+    return block;
+}
 } // namespace
 
 ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *parent)
@@ -122,12 +136,14 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
 {
     m_gameName = m_client.appData(m_appId, "name");
     setWindowTitle(m_gameName.isEmpty() ? QStringLiteral("App %1").arg(m_appId) : m_gameName);
+    installTitleBar(this);
     m_steamLanguage = m_client.currentGameLanguage();
     if (m_steamLanguage.isEmpty())
     {
         m_steamLanguage = QStringLiteral("english");
     }
     m_achievementFilter->setSourceModel(m_achievements);
+    createActions();
 
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
@@ -142,7 +158,6 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
     layout->addWidget(m_tabs, 1);
     setCentralWidget(central);
 
-    createToolBar();
     createStatusBar();
     restoreSettings();
 
@@ -183,8 +198,37 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
         }
     });
     m_discord->setTitle(m_gameName);
-    m_discord->setEnabled(m_discordAction->isChecked());
+    m_discord->setEnabled(isDiscordPresenceEnabled());
+
+    // The settings menu lives in the game list; follow what's changed there.
+    m_settingsWatcher.addPath(settings().fileName());
+    connect(&m_settingsWatcher, &QFileSystemWatcher::fileChanged, this, &ManagerWindow::onSettingsChanged);
+
     QTimer::singleShot(0, this, &ManagerWindow::refreshStats);
+}
+
+void ManagerWindow::onSettingsChanged(const QString &path)
+{
+    // QSettings replaces the file when it saves, which drops it from the watcher.
+    if (!m_settingsWatcher.files().contains(path))
+    {
+        m_settingsWatcher.addPath(path);
+    }
+    // The game list saves other things too (its zoom, its geometry), so only
+    // what actually changed is applied: regrouping rebuilds the list.
+    settings().sync();
+    applySavedTheme();
+    applyLanguage();
+    if (isGroupingEnabled() != m_groupingApplied)
+    {
+        applyGroups();
+    }
+    const bool discord = isDiscordPresenceEnabled();
+    m_discord->setEnabled(discord);
+    if (!discord)
+    {
+        m_discordLabel->hide();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,9 +238,7 @@ ManagerWindow::ManagerWindow(uint32_t appId, steam::Client &client, QWidget *par
 QWidget *ManagerWindow::createHeader()
 {
     auto *header = new QFrame(this);
-    header->setFrameShape(QFrame::StyledPanel);
-    header->setAutoFillBackground(true);
-    header->setBackgroundRole(QPalette::Base);
+    header->setObjectName(QStringLiteral("gameHeader")); // a rounded block, see Style.cpp
     auto *layout = new QHBoxLayout(header);
     layout->setContentsMargins(10, 10, 14, 10);
     layout->setSpacing(14);
@@ -232,6 +274,16 @@ QWidget *ManagerWindow::createHeader()
     info->addStretch();
     layout->addLayout(info, 1);
 
+    auto *pageButton = new QToolButton(header);
+    pageButton->setIcon(icons::get(QStringLiteral("external")));
+    pageButton->setToolTip(tr("Open the achievements page in the browser"));
+    pageButton->setAutoRaise(true);
+    connect(pageButton, &QToolButton::clicked, this, [this] {
+        QDesktopServices::openUrl(
+            QUrl(QStringLiteral("https://steamcommunity.com/stats/%1/achievements").arg(m_appId)));
+    });
+    layout->addWidget(pageButton, 0, Qt::AlignTop | Qt::AlignRight);
+
     return header;
 }
 
@@ -253,6 +305,8 @@ QWidget *ManagerWindow::createAchievementsPage()
     m_achievementSearch->setToolTip(tr("Matches name, description or ID (Ctrl+F)"));
     connect(m_achievementSearch, &QLineEdit::textChanged, m_achievementFilter, &AchievementFilterModel::setSearchText);
     controls->addWidget(m_achievementSearch);
+    controls->addWidget(createActionButton(m_storeAction, page));
+    controls->addWidget(createActionButton(m_refreshAction, page));
 
     // Segmented state filter.
     m_stateGroup = new QButtonGroup(page);
@@ -312,7 +366,6 @@ QWidget *ManagerWindow::createAchievementsPage()
         int mode;
     } bulk[] = {
         {"lock", tr("Lock all"), tr("Lock all shown achievements"), LockMode},
-        {"invert", tr("Invert"), tr("Invert the state of all shown achievements"), InvertMode},
         {"unlock", tr("Unlock all"), tr("Unlock all shown achievements"), UnlockMode},
     };
     for (const auto &entry : bulk)
@@ -330,6 +383,23 @@ QWidget *ManagerWindow::createAchievementsPage()
         });
         controls->addWidget(button);
     }
+
+    // Kept apart from the save button so it isn't hit by accident.
+    auto *separator = new QFrame(page);
+    separator->setFrameShape(QFrame::VLine);
+    separator->setFrameShadow(QFrame::Sunken);
+    controls->addSpacing(6);
+    controls->addWidget(separator);
+    controls->addSpacing(6);
+    m_resetAction = new QAction(icons::get(QStringLiteral("reset")), tr("Reset…"), this);
+    m_resetAction->setToolTip(tr("Reset statistics and optionally achievements for this game"));
+    connect(m_resetAction, &QAction::triggered, this, &ManagerWindow::resetAllStats);
+    auto *resetButton = new QToolButton(page);
+    resetButton->setDefaultAction(m_resetAction);
+    resetButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    resetButton->setAutoRaise(true);
+    resetButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    controls->addWidget(resetButton);
     layout->addLayout(controls);
 
     m_achievementView = new QTreeView(page);
@@ -353,7 +423,7 @@ QWidget *ManagerWindow::createAchievementsPage()
     m_achievementView->installEventFilter(this);
     connect(
         m_achievementView, &QTreeView::customContextMenuRequested, this, &ManagerWindow::showAchievementContextMenu);
-    layout->addWidget(m_achievementView, 1);
+    layout->addWidget(createListBlock(m_achievementView, page), 1);
 
     // Sections toggle on a single click and stay collapsed across filtering and reloads.
     connect(m_achievementView, &QTreeView::clicked, this, [this](const QModelIndex &index) {
@@ -409,6 +479,9 @@ QWidget *ManagerWindow::createStatisticsPage()
         tr("I understand by modifying the values of stats, I may screw things up and can't blame anyone but myself."),
         warning);
     warningLayout->addWidget(m_editStatsCheck, 1);
+    // Saving and reloading cover the statistics too.
+    warningLayout->addWidget(createActionButton(m_storeAction, warning));
+    warningLayout->addWidget(createActionButton(m_refreshAction, warning));
     layout->addWidget(warning);
 
     m_statsView = new QTableView(page);
@@ -432,30 +505,26 @@ QWidget *ManagerWindow::createStatisticsPage()
     header->resizeSection(StatsModel::ValueColumn, 140);
     header->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     connect(m_statsView, &QTableView::customContextMenuRequested, this, &ManagerWindow::showStatContextMenu);
-    layout->addWidget(m_statsView, 1);
+    layout->addWidget(createListBlock(m_statsView, page), 1);
 
     connect(m_editStatsCheck, &QCheckBox::toggled, m_stats, &StatsModel::setEditingEnabled);
     return page;
 }
 
-void ManagerWindow::createToolBar()
+void ManagerWindow::createActions()
 {
-    auto *toolBar = addToolBar(tr("Main"));
-    toolBar->setObjectName(QStringLiteral("mainToolBar"));
-    toolBar->setMovable(false);
-    toolBar->setFloatable(false);
-    toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    toolBar->setIconSize(QSize(18, 18));
-    toolBar->toggleViewAction()->setVisible(false);
-
-    m_storeAction = toolBar->addAction(icons::get(QStringLiteral("save")), tr("Save changes"));
+    // Added to the window so the shortcuts work whatever tab is shown; the
+    // buttons sit next to the search field and on the statistics page.
+    m_storeAction = new QAction(icons::get(QStringLiteral("save")), tr("Save changes"), this);
+    addAction(m_storeAction);
     m_storeAction->setShortcut(QKeySequence::Save);
     m_storeAction->setToolTip(tr("Store achievements and statistics for this game (Ctrl+S)"));
     connect(m_storeAction, &QAction::triggered, this, [this] {
         store();
     });
 
-    m_refreshAction = toolBar->addAction(icons::get(QStringLiteral("refresh")), tr("Refresh"));
+    m_refreshAction = new QAction(icons::get(QStringLiteral("refresh")), tr("Refresh"), this);
+    addAction(m_refreshAction);
     m_refreshAction->setShortcut(QKeySequence::Refresh);
     m_refreshAction->setToolTip(tr("Reload achievements and statistics from Steam (F5)"));
     connect(m_refreshAction, &QAction::triggered, this, [this] {
@@ -464,58 +533,15 @@ void ManagerWindow::createToolBar()
             refreshStats();
         }
     });
+}
 
-    toolBar->addSeparator();
-    m_resetAction = toolBar->addAction(icons::get(QStringLiteral("reset")), tr("Reset…"));
-    m_resetAction->setToolTip(tr("Reset statistics and optionally achievements for this game"));
-    connect(m_resetAction, &QAction::triggered, this, &ManagerWindow::resetAllStats);
-
-    auto *spacer = new QWidget(toolBar);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    toolBar->addWidget(spacer);
-
-    auto *storeButton = new QToolButton(toolBar);
-    storeButton->setIcon(icons::get(QStringLiteral("external")));
-    storeButton->setToolTip(tr("Open the achievements page in the browser"));
-    connect(storeButton, &QToolButton::clicked, this, [this] {
-        QDesktopServices::openUrl(
-            QUrl(QStringLiteral("https://steamcommunity.com/stats/%1/achievements").arg(m_appId)));
-    });
-    toolBar->addWidget(storeButton);
-
-    auto *settingsButton = new QToolButton(toolBar);
-    settingsButton->setIcon(icons::get(QStringLiteral("menu")));
-    settingsButton->setToolTip(tr("Settings"));
-    settingsButton->setPopupMode(QToolButton::InstantPopup);
-    auto *settingsMenu = createSettingsMenu(this);
-    QAction *first = settingsMenu->actions().value(0);
-    m_languageMenu = createAchievementLanguageMenu(settingsMenu);
-    m_languageMenu->setEnabled(false);
-    settingsMenu->insertMenu(first, m_languageMenu);
-    m_groupAction =
-        new QAction(icons::get(QStringLiteral("grid")), tr("&Group by DLC (steamhunters.com)"), settingsMenu);
-    m_groupAction->setCheckable(true);
-    m_groupAction->setChecked(isGroupingEnabled());
-    connect(m_groupAction, &QAction::toggled, this, [this](bool checked) {
-        settings().setValue(QStringLiteral("game/groupAchievements"), checked);
-        applyGroups();
-    });
-    settingsMenu->insertAction(first, m_groupAction);
-    m_discordAction = new QAction(icons::get(QStringLiteral("play")), tr("Show the game in &Discord"), settingsMenu);
-    m_discordAction->setCheckable(true);
-    m_discordAction->setChecked(settings().value(QStringLiteral("game/discordPresence"), false).toBool());
-    connect(m_discordAction, &QAction::toggled, this, [this](bool checked) {
-        settings().setValue(QStringLiteral("game/discordPresence"), checked);
-        m_discord->setEnabled(checked);
-        if (!checked)
-        {
-            m_discordLabel->hide();
-        }
-    });
-    settingsMenu->insertAction(first, m_discordAction);
-    settingsMenu->insertSeparator(first);
-    settingsButton->setMenu(settingsMenu);
-    toolBar->addWidget(settingsButton);
+QToolButton *ManagerWindow::createActionButton(QAction *action, QWidget *parent)
+{
+    auto *button = new QToolButton(parent);
+    button->setDefaultAction(action);
+    button->setAutoRaise(true);
+    button->setIconSize(QSize(18, 18));
+    return button;
 }
 
 void ManagerWindow::createStatusBar()
@@ -650,7 +676,7 @@ void ManagerWindow::onUserStatsReceived(const steam::UserStatsReceived &message)
     }
     setWindowTitle(m_gameName.isEmpty() ? QStringLiteral("App %1").arg(m_appId) : m_gameName);
 
-    populateLanguages();
+    applyLanguage();
     loadAchievements();
     loadStatistics();
     setBusy(false);
@@ -720,15 +746,6 @@ void ManagerWindow::loadStatistics()
     m_stats->setStats(std::move(stats));
 }
 
-void ManagerWindow::populateLanguages()
-{
-    fillAchievementLanguageMenu(m_languageMenu, m_schema->languages, m_steamLanguage, [this] {
-        applyLanguage();
-    });
-    m_languageMenu->setEnabled(!m_schema->languages.isEmpty());
-    applyLanguage();
-}
-
 QString ManagerWindow::effectiveLanguage() const
 {
     // The preference only applies when the game actually has that language.
@@ -752,9 +769,15 @@ bool ManagerWindow::isGroupingEnabled() const
     return settings().value(QStringLiteral("game/groupAchievements"), true).toBool();
 }
 
+bool ManagerWindow::isDiscordPresenceEnabled() const
+{
+    return settings().value(QStringLiteral("game/discordPresence"), false).toBool();
+}
+
 void ManagerWindow::applyGroups()
 {
-    if (!isGroupingEnabled())
+    m_groupingApplied = isGroupingEnabled();
+    if (!m_groupingApplied)
     {
         m_achievements->setGroups({});
         return;
@@ -1022,7 +1045,7 @@ void ManagerWindow::applyToAchievements(const QList<int> &rows, int mode)
         return;
     }
     const int skipped =
-        mode == InvertMode ? m_achievements->invert(rows) : m_achievements->setChecked(rows, mode == UnlockMode);
+        mode == RevertMode ? m_achievements->revert(rows) : m_achievements->setChecked(rows, mode == UnlockMode);
     if (skipped > 0)
     {
         showStatusMessage(tr("%n protected achievement(s) skipped — they can't be changed.", nullptr, skipped), true);
@@ -1055,9 +1078,6 @@ void ManagerWindow::showAchievementContextMenu(const QPoint &position)
     menu.addAction(icons::get(QStringLiteral("lock")), tr("&Lock selected"), this, [this, rows] {
         applyToAchievements(rows, LockMode);
     });
-    menu.addAction(icons::get(QStringLiteral("invert")), tr("&Invert selected"), this, [this, rows] {
-        applyToAchievements(rows, InvertMode);
-    });
 
     QList<int> modified;
     for (const int row : rows)
@@ -1068,7 +1088,7 @@ void ManagerWindow::showAchievementContextMenu(const QPoint &position)
         }
     }
     auto *revert = menu.addAction(icons::get(QStringLiteral("refresh")), tr("&Revert changes"), this, [this, modified] {
-        applyToAchievements(modified, InvertMode);
+        applyToAchievements(modified, RevertMode);
     });
     revert->setEnabled(!modified.isEmpty());
 
@@ -1095,9 +1115,6 @@ void ManagerWindow::showSectionContextMenu(const QModelIndex &section, const QPo
     });
     menu.addAction(icons::get(QStringLiteral("lock")), tr("&Lock all in this section"), this, [this, rows] {
         applyToAchievements(rows, LockMode);
-    });
-    menu.addAction(icons::get(QStringLiteral("invert")), tr("&Invert this section"), this, [this, rows] {
-        applyToAchievements(rows, InvertMode);
     });
     menu.addSeparator();
     menu.addAction(tr("&Expand all"), this, [this] {
@@ -1200,6 +1217,9 @@ void ManagerWindow::updateSummary()
     m_summaryProgress->setValue(unlocked);
 
     m_storeAction->setText(changes > 0 ? tr("Save changes (%1)").arg(changes) : tr("Save changes"));
+    // The button shows only its icon, so the tool tip carries the count.
+    m_storeAction->setToolTip(changes > 0 ? tr("Save %n change(s) to Steam (Ctrl+S)", nullptr, changes)
+                                          : tr("Store achievements and statistics for this game (Ctrl+S)"));
     m_storeAction->setEnabled(!m_busy && changes > 0);
 
     m_tabs->setTabText(

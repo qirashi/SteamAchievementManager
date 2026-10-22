@@ -79,6 +79,7 @@ private:
     void onAppDataChanged(const steam::AppDataChanged &message);
 
     void addGameById();
+    void setAddFieldVisible(bool visible);
     void launch(const QModelIndex &index);
     void showContextMenu(const QPoint &position);
     void setZoom(int percent);
@@ -95,6 +96,9 @@ private:
 
     QLineEdit *m_search = nullptr;
     QLineEdit *m_addEdit = nullptr;
+    QAction *m_addAction = nullptr;     // toggles the App ID field
+    QAction *m_addEditAction = nullptr; // the field in the tool bar
+    QAction *m_addOkAction = nullptr;
     QAction *m_refreshAction = nullptr;
     QList<QAction *> m_typeActions;
 

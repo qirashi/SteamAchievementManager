@@ -27,7 +27,6 @@
 #include "AchievementModel.h"
 #include "Icons.h"
 
-#include <QApplication>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -47,6 +46,36 @@ const QColor kGreen(0x2e, 0xa0, 0x43);
 const QColor kOrange(0xd2, 0x8a, 0x22);
 const QColor kRed(0xd7, 0x3a, 0x49);
 const QColor kBlue(0x3b, 0x82, 0xf6);
+
+// A section and its achievements are painted as one rounded card, inset from
+// the sides of the list; a gap above each section separates the cards.
+constexpr int kCardInset = 6;
+constexpr int kCardRadius = 8;
+constexpr int kSectionGap = 8;
+// The hover and selection blocks lie inside the card.
+constexpr int kSelectionInset = 3;
+
+// `rect` with rounded corners on the top and / or on the bottom only.
+QPainterPath roundedRect(const QRectF &rect, qreal radius, bool top, bool bottom)
+{
+    QPainterPath path;
+    path.addRoundedRect(rect.adjusted(0, top ? 0 : -radius, 0, bottom ? 0 : radius), radius, radius);
+    if (top && bottom)
+    {
+        return path;
+    }
+    QPainterPath bounds;
+    bounds.addRect(rect);
+    return path.intersected(bounds);
+}
+
+// The row across all columns, inset from the sides of the list.
+QRectF rowRect(const QStyleOptionViewItem &option)
+{
+    const auto *view = qobject_cast<const QAbstractItemView *>(option.widget);
+    const int width = view != nullptr ? view->viewport()->width() : option.rect.right() + 1;
+    return QRectF(kCardInset, option.rect.top(), width - 2 * kCardInset, option.rect.height());
+}
 
 // Lays out `text` in at most `maxLines` lines, eliding the last one.
 QStringList wrapLines(const QString &text, const QFont &font, qreal width, int maxLines)
@@ -120,7 +149,7 @@ QSize AchievementDelegate::sizeHint(const QStyleOptionViewItem &option, const QM
     {
         // Keep the unlock time column sized by the achievements only.
         const int width = index.column() == AchievementModel::NameColumn ? 360 : 0;
-        return QSize(width, option.fontMetrics.height() * 3 / 2 + 2 * kPadding);
+        return QSize(width, option.fontMetrics.height() * 3 / 2 + 2 * kPadding + kSectionGap);
     }
 
     QSize size = QStyledItemDelegate::sizeHint(option, index);
@@ -130,38 +159,93 @@ QSize AchievementDelegate::sizeHint(const QStyleOptionViewItem &option, const QM
     {
         size.setWidth(qMax(size.width(), 360));
     }
+    else
+    {
+        size.rwidth() += kCardInset;
+    }
     return size;
 }
 
 QRect AchievementDelegate::checkArea(const QStyleOptionViewItem &option) const
 {
-    return QRect(option.rect.left(), option.rect.top(), kCheckAreaWidth, option.rect.height());
+    return QRect(option.rect.left() + kCardInset, option.rect.top(), kCheckAreaWidth, option.rect.height());
+}
+
+void AchievementDelegate::paintBackground(QPainter *painter,
+                                          const QStyleOptionViewItem &option,
+                                          const QModelIndex &index) const
+{
+    const QPalette &palette = option.palette;
+    const bool darkBase = palette.color(QPalette::Base).lightness() < 128;
+    const bool section = index.data(AchievementModel::SectionRole).toBool();
+    QRectF row = rowRect(option);
+    if (section)
+    {
+        row.setTop(row.top() + kSectionGap);
+    }
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    // Every column paints its part of the row.
+    painter->setClipRect(option.rect);
+    painter->setPen(Qt::NoPen);
+
+    QColor card = palette.color(QPalette::Text);
+    if (section)
+    {
+        const QModelIndex first = index.siblingAtColumn(0);
+        const auto *view = qobject_cast<const QTreeView *>(option.widget);
+        const bool open = view != nullptr && view->isExpanded(first) && index.model()->rowCount(first) > 0;
+        card.setAlphaF(darkBase ? 0.075f : 0.05f);
+        painter->setBrush(card);
+        painter->drawPath(roundedRect(row, kCardRadius, true, !open));
+    }
+    else if (index.parent().isValid())
+    {
+        const bool last = index.row() == index.model()->rowCount(index.parent()) - 1;
+        card.setAlphaF(darkBase ? 0.03f : 0.022f);
+        painter->setBrush(card);
+        painter->drawPath(roundedRect(row, kCardRadius, false, last));
+    }
+
+    const bool selected = option.state & QStyle::State_Selected;
+    if (selected || option.state & QStyle::State_MouseOver)
+    {
+        QColor block = palette.color(QPalette::Text);
+        if (selected)
+        {
+            const QPalette::ColorGroup group = !(option.state & QStyle::State_Enabled) ? QPalette::Disabled
+                                               : option.state & QStyle::State_Active   ? QPalette::Active
+                                                                                       : QPalette::Inactive;
+            block = palette.color(group, QPalette::Highlight);
+        }
+        else
+        {
+            block.setAlphaF(darkBase ? 0.07f : 0.05f);
+        }
+        painter->setBrush(block);
+        constexpr qreal radius = kCardRadius - kSelectionInset;
+        painter->drawRoundedRect(row.adjusted(kSelectionInset, 2, -kSelectionInset, -2), radius, radius);
+    }
+    painter->restore();
 }
 
 void AchievementDelegate::paintSection(QPainter *painter,
                                        const QStyleOptionViewItem &option,
                                        const QModelIndex &index) const
 {
+    paintBackground(painter, option, index);
+    if (index.column() != AchievementModel::NameColumn)
+    {
+        return;
+    }
+
     const QPalette &palette = option.palette;
     const bool darkBase = palette.color(QPalette::Base).lightness() < 128;
-    const QRect rect = option.rect;
+    const QRect rect = option.rect.adjusted(kCardInset, kSectionGap, 0, 0);
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-
-    // Band across the whole row, with a separator line on top.
-    QColor band = palette.color(QPalette::Text);
-    band.setAlphaF(darkBase ? 0.07f : 0.045f);
-    painter->fillRect(rect, band);
-    QColor line = palette.color(QPalette::Text);
-    line.setAlphaF(0.14f);
-    painter->fillRect(QRect(rect.left(), rect.top(), rect.width(), 1), line);
-
-    if (index.column() != AchievementModel::NameColumn)
-    {
-        painter->restore();
-        return;
-    }
 
     const auto *view = qobject_cast<const QTreeView *>(option.widget);
     const bool expanded = view != nullptr && view->isExpanded(index);
@@ -268,29 +352,28 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
         paintSection(painter, option, index);
         return;
     }
+    paintBackground(painter, option, index);
+    const bool selected = option.state & QStyle::State_Selected;
     if (index.column() != AchievementModel::NameColumn)
     {
-        QStyledItemDelegate::paint(painter, option, index);
+        // Only the text: the background is the card's.
+        QStyleOptionViewItem opt = option;
+        opt.state &= ~(QStyle::State_Selected | QStyle::State_MouseOver | QStyle::State_HasFocus);
+        opt.rect.adjust(0, 0, -kCardInset, 0);
+        if (selected)
+        {
+            opt.palette.setColor(QPalette::Text, option.palette.color(QPalette::HighlightedText));
+        }
+        QStyledItemDelegate::paint(painter, opt, index);
         return;
     }
 
-    QStyleOptionViewItem opt = option;
-    initStyleOption(&opt, index);
-    const QWidget *widget = opt.widget;
-    QStyle *style = widget != nullptr ? widget->style() : QApplication::style();
-    const QPalette &palette = opt.palette;
+    const QPalette &palette = option.palette;
     const bool darkBase = palette.color(QPalette::Base).lightness() < 128;
-    const bool selected = opt.state & QStyle::State_Selected;
 
     painter->save();
 
-    // Background (selection / hover) as the style draws it.
-    opt.text.clear();
-    opt.icon = QIcon();
-    opt.features &= ~QStyleOptionViewItem::HasCheckIndicator;
-    style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, widget);
-
-    const QRect rect = option.rect;
+    const QRect rect = option.rect.adjusted(kCardInset, 0, 0, 0);
     const bool checked = index.data(Qt::CheckStateRole).value<Qt::CheckState>() == Qt::Checked;
     const bool modified = index.data(AchievementModel::ModifiedRole).toBool();
     const bool isProtected = index.data(AchievementModel::ProtectedRole).toBool();
@@ -302,7 +385,10 @@ void AchievementDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     // Pending change marker.
     if (modified)
     {
-        painter->fillRect(QRect(rect.left(), rect.top() + 4, 3, rect.height() - 8), checked ? kGreen : kOrange);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(checked ? kGreen : kOrange);
+        painter->drawRoundedRect(
+            QRectF(rect.left() + kSelectionInset + 1, rect.top() + 8, 3, rect.height() - 16), 1.5, 1.5);
     }
 
     // Check box.
